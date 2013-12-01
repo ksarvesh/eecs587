@@ -1,0 +1,32 @@
+discharging: 1
+relabeling vertex 1
+relabeled height for 1 : 1
+discharging: 2
+relabeling vertex 2
+relabeled height for 2 : 1
+discharging: 1
+relabeling vertex 1
+relabeled height for 1 : 2
+discharging: 2
+pushing 7 from 2 to 4
+relabeling vertex 2
+relabeled height for 2 : 7
+discharging: 1
+relabeling vertex 1
+relabeled height for 1 : 7
+discharging: 4
+relabeling vertex 4
+relabeled height for 4 : 1
+discharging: 2
+pushing 2 from 2 to 0
+discharging: 1
+pushing 2 from 1 to 0
+discharging: 4
+pushing 4 from 4 to 5
+relabeling vertex 4
+relabeled height for 4 : 8
+discharging: 4
+pushing 3 from 4 to 2
+discharging: 2
+pushing 3 from 2 to 0
+4 is the maximum flow value
