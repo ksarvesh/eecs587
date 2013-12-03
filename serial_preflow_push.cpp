@@ -152,7 +152,8 @@ void push( queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edg
 
 	// add vertex w if it is not already in active queue 
 	// and vertex - {s,t}
-	if( w!=sinkId && w!=sourceId &&  vertexList[w].isActive == 0 ) 
+	//if( w!=sinkId && w!=sourceId &&  vertexList[w].isActive == 0 ) 
+	if( w!=sinkId && w!=sourceId &&  vertexList[w].excessFlow == send ) 
 	{
         //cout<< "pushing v onto the queue " << w<<endl;
 		activeVertexQueue.push(w);
@@ -300,7 +301,7 @@ int main()
 	// read input text file containing graph with vertices, edges, and 
 	// corresponding edges capacities
 	//
-	preflow_push("test1.txt");
+	preflow_push("test/test1.txt");
   return(0);
 }
 
