@@ -424,7 +424,6 @@ void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
 
 void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edge>& edgeList, vector<vector<int> >& adjList, vector<omp_lock_t>& vertexLock, omp_lock_t* queueLock){
     queue<int> inQueue, outQueue;
-    bool isInputFromOutputQueue = false;
     
     omp_set_lock(queueLock);
     
@@ -479,6 +478,8 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             int v= inQueue.front();
             inQueue.pop();
             discharge(outQueue, vertexList, edgeList, adjList, v, vertexLock);
+						//TODO: don't wait for the entire inQueue to be discharged before pushing out 
+						//vertices to the outQueue
         }
 
         getNewVertex(inQueue, outQueue);
