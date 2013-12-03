@@ -247,7 +247,8 @@ void push( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& edgeL
 
 	// add vertex w if it is not already in active queue 
 	// and vertex - {s,t}
-	if( w!=sinkId && w!=sourceId &&  vertexList[w].isActive == 0 ) 
+	//if( w!=sinkId && w!=sourceId &&  vertexList[w].isActive == 0 ) 
+	if( w!=sinkId && w!=sourceId &&  vertexList[w].excessFlow == send ) 
 	{
         //cout<< "pushing v onto the queue " << w<<endl;
 		outQueue.push(w);
@@ -376,13 +377,16 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
  * ****************************************************************/
 
 
-void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue){
+void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_lock_t>& vertexLock, vector<vertex>& vertexList){
     int numNewVertices= MIN(IN_OUT_QUEUE_SIZE - inQueue.size(), activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
         int v= activeVertexQueue.front();
-        activeVertexQueue.pop();
-        inQueue.push(v);
+				activeVertexQueue.pop();
+        omp_set_lock(&vertexLock[v]);
+       	vertexList[v].isActive = 0;
+				inQueue.push(v);
+				omp_unset_lock(&vertexLock[v]);
     }
 
     return;
@@ -402,7 +406,12 @@ void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue){
 void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
    while(!outQueue.empty()){
        int v= outQueue.front();
-       outQueue.pop();
+       if(DEBUG){
+       	omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is pushing vertex "<<v<<" into the shared queue"<<endl;
+        omp_unset_lock(&printLock);
+       }
+			 outQueue.pop();
        activeVertexQueue.push(v);
    }
    return;
@@ -437,7 +446,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         
         //Get new vertices from the shared queue if the size of the current input buffer
         //is smaller than the size we set in IN_OUT_QUEUE_SIZE
-        getNewVertex(inQueue, activeVertexQueue);
+        getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         
         //Spin loop (busy wait) implementation of cpu sleep
         //that is to be woken up by an interprocessor interrupt
@@ -452,7 +461,12 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             
             if(numIdleProcessors == NUM_THREADS || isCompleted){
                 isCompleted= 1;
-                omp_unset_lock(queueLock);
+        				if(DEBUG){
+            			omp_set_lock(&printLock);
+            			cout<<"size of shared: "<<activeVertexQueue.size()<<" size of inQueue: "<<inQueue.size()<<" outQueue.size() "<<outQueue.size()<<endl;
+            			omp_unset_lock(&printLock);
+                }
+								omp_unset_lock(queueLock);
                 return;
             }
             
@@ -464,7 +478,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             //TODO: What if we put the -- outside the while loop,
             //will that still work. Which will be more efficient.
             numIdleProcessors--;
-            getNewVertex(inQueue, activeVertexQueue);
+            getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         }
 
         //At this point, this processor still holds the shared activeVertexQueue 
@@ -482,7 +496,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 						//vertices to the outQueue
         }
 
-        getNewVertex(inQueue, outQueue);
+        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
 
         omp_set_lock(queueLock);
         pushNewVertex(outQueue, activeVertexQueue);
