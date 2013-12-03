@@ -42,6 +42,7 @@
 #include <queue>
 #include <fstream>
 #include <assert.h>
+#include <omp.h>
 
 using namespace std;
 
@@ -49,9 +50,13 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
+#define NUM_THREADS 2
+#define IN_OUT_QUEUE_SIZE 1
+#define DEBUG 1
 
 // {s,t} read from input file
-int sourceId, sinkId;
+int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
+omp_lock_t printLock;
 
 // data structure to represent graph vertices 
 struct vertex{
@@ -230,9 +235,12 @@ void push( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& edgeL
 		edgeList[e].flow -= send;
 	}
 
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<"thread "<<omp_get_thread_num()<<" is pushing "<<send<< " from "<<v<<" to "<<w<<endl;
+	    omp_unset_lock(&printLock);
+    }
 
-    cout<<"pushing "<<send<< " from "<<v<<" to "<<w<<endl;
-	
 	// update excessFlow 
 	vertexList[v].excessFlow -= send;
 	vertexList[w].excessFlow += send;
@@ -286,8 +294,12 @@ void relabel( vector<vector<int> >& adjList, vector<vertex>& vertexList, vector<
 		}
 	}
 	vertexList[v].height = min_height + 1;
-	// DEBUG
-    cout<<"relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
+	
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<"thread "<<omp_get_thread_num()<<" has relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
+	    omp_unset_lock(&printLock);
+    }
 }
 
 /*****************************************************************
@@ -339,7 +351,11 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 		// get lock of vertex v before relabel
 		omp_set_lock( &vertexLock[v] );
 		// DEBUG
-        cout<< "relabeling vertex "<<v<<endl;
+        if(DEBUG){
+            omp_set_lock(&printLock);
+            cout<< "thread "<<omp_get_thread_num()<<" is relabeling vertex "<<v<<endl;
+            omp_unset_lock(&printLock);
+        }
 		relabel(adjList, vertexList, edgeList, v);
 		// release lock of vertex v after relabel
 		vertexList[v].isActive= 1;
@@ -351,6 +367,129 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 	
 	return;
 }
+
+/*****************************************************************
+ * This function takes in two queues as inputs and pushes from the
+ * second queue to the frist queue untill the frist queue reaches
+ * its max possible size set as a #define, or until the second queue
+ * becomes empty
+ * ****************************************************************/
+
+
+void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue){
+    int numNewVertices= MIN(IN_OUT_QUEUE_SIZE - inQueue.size(), activeVertexQueue.size());
+
+    for(int i=0; i<numNewVertices; i++){
+        int v= activeVertexQueue.front();
+        activeVertexQueue.pop();
+        inQueue.push(v);
+    }
+
+    return;
+}
+
+
+
+/*****************************************************************
+ * This function pushes from queue 1 to queue 2 all its elements.
+ * This is implemented to push all the excess active vertics from
+ * the outQueue of a processor to the shared activeVertexQueue to
+ * enable other possibly free processors to take up the work and 
+ * start processing those vertices.
+ * ****************************************************************/
+
+
+void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
+   while(!outQueue.empty()){
+       int v= outQueue.front();
+       outQueue.pop();
+       activeVertexQueue.push(v);
+   }
+   return;
+}
+
+
+/*****************************************************************
+ * The startParallelAlgo takes as input the initialized
+ * vertex, edge, adjacency list and queue data structures.
+ * Each processor tries to grab a set of vertices from the active
+ * vertex queue and works on that set. Once all its out queue is 
+ * full, it will push the out queue onto the active vertex queue.
+ * If its inqueue is empty, it will push its non empty out queue
+ * and put itself on the idleProcessor waiting queue. The elements
+ * of the idleProcessor wait queue are woken up when ever there
+ * are new elements pushed onto the activeVertexQueue.
+ ****************************************************************/
+
+
+void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edge>& edgeList, vector<vector<int> >& adjList, vector<omp_lock_t>& vertexLock, omp_lock_t* queueLock){
+    queue<int> inQueue, outQueue;
+    bool isInputFromOutputQueue = false;
+    
+    omp_set_lock(queueLock);
+    
+    while(1){
+
+        /*if(DEBUG){
+            omp_set_lock(&printLock);
+            cout<<omp_get_thread_num()<<" is the thread in progess"<<endl;
+            omp_unset_lock(&printLock);
+        }*/
+        
+        //Get new vertices from the shared queue if the size of the current input buffer
+        //is smaller than the size we set in IN_OUT_QUEUE_SIZE
+        getNewVertex(inQueue, activeVertexQueue);
+        
+        //Spin loop (busy wait) implementation of cpu sleep
+        //that is to be woken up by an interprocessor interrupt
+        while(inQueue.empty()){
+            numIdleProcessors++;
+            
+            /*if(DEBUG){
+                omp_set_lock(&printLock);
+                cout<<isCompleted<<" "<<endl; 
+                omp_unset_lock(&printLock);
+            }*/
+            
+            if(numIdleProcessors == NUM_THREADS || isCompleted){
+                isCompleted= 1;
+                omp_unset_lock(queueLock);
+                return;
+            }
+            
+            //Busy wait loop
+            omp_unset_lock(queueLock);
+            //TODO:sleep(10ms);
+            omp_set_lock(queueLock);
+            
+            //TODO: What if we put the -- outside the while loop,
+            //will that still work. Which will be more efficient.
+            numIdleProcessors--;
+            getNewVertex(inQueue, activeVertexQueue);
+        }
+
+        //At this point, this processor still holds the shared activeVertexQueue 
+        //lock. Also, at this point, the inQueue is non zero in size.
+        //We can give up the shared queue lock at this point since we are not
+        //acessing the shared variable any more.
+        omp_unset_lock(queueLock);
+
+        //Start processing the vertices on the inQueue
+        while(!inQueue.empty()){
+            int v= inQueue.front();
+            inQueue.pop();
+            discharge(outQueue, vertexList, edgeList, adjList, v, vertexLock);
+        }
+
+        getNewVertex(inQueue, outQueue);
+
+        omp_set_lock(queueLock);
+        pushNewVertex(outQueue, activeVertexQueue);
+   }
+
+}
+
+
 
 /*****************************************************************
  * The preflow_push function takes as input a text file, dynamically
@@ -370,7 +509,7 @@ void preflow_push(string fileName)
 	queue<int> 						activeVertexQueue;
 
 	// vertices and queue locks
-	omp_lock_t 					queueLock;
+	omp_lock_t          queueLock;
 	vector<omp_lock_t> 	vertexLock;
 
 	// populate data structures from input text file, push all possible flow out of 
@@ -381,7 +520,7 @@ void preflow_push(string fileName)
 	}
 
 	// apply discharge opeartion until active queue is empty
-	while(activeVertexQueue.size() > 0){
+	/*while(activeVertexQueue.size() > 0){
 
 		// pop next vertex from queue, mark as not active
 		int v= activeVertexQueue.front();
@@ -392,13 +531,28 @@ void preflow_push(string fileName)
         cout<<"discharging: "<<v<<endl;
 
 		// discharge vertex until excess becomes 0 or vertex is relabelled
-		discharge(activeVertexQueue, vertexList, edgeList, adjList, v, vertexLock );
-	}
+		discharge(activeVertexQueue, vertexList, edgeList, adjList, v, vertexLock);
+	}*/
+    #pragma omp parallel num_threads(NUM_THREADS) 
+    {
+        startParallelAlgo(activeVertexQueue, vertexList, edgeList, adjList, vertexLock, &queueLock);
+        
+        //No thread would reach this spot unless all other threads are already sleeping
+        //i.e. only when the last thread tries to go to sleep, it will realize that all 
+        //other threads are already asleep, and so it will reach this spot. Hence we need 
+        //a NO_WAIT, since the other threads are never going to reach this spot ever.    
+    	#pragma omp single
+        {
+            if(DEBUG){
+                omp_set_lock(&printLock);
+                cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
+                omp_unset_lock(&printLock);
+            }
+        }
+   }
 	
-	cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
-
+   return;
 }
-
 /*****************************************************************
  * Program starts here. Data structures are dynamically initialized
  * given an input text file. 
@@ -409,7 +563,9 @@ int main()
 	// read input text file containing graph with vertices, edges, and 
 	// corresponding edges capacities
 	//
-	preflow_push("test1.txt");
+
+    omp_init_lock(&printLock);
+	preflow_push("test/test1.txt");
   return(0);
 }
 
