@@ -62,7 +62,7 @@ omp_lock_t printLock;
 struct vertex{
     int height;					
     int excessFlow;		 
-    int isActive;			// FALSE - vertex is not in active queue
+    //int isActive;			// FALSE - vertex is not in active queue
 											// TRUE  - vertex already in active queue
 };
 
@@ -165,7 +165,8 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     //has a height of zero. Set all excess flow to zero initially.
     //Set height of the source node to be numVertices
     vertex zeroVertex;
-    zeroVertex.height = zeroVertex.excessFlow = zeroVertex.isActive = 0;
+    //zeroVertex.height = zeroVertex.excessFlow = zeroVertex.isActive = 0;
+    zeroVertex.height = zeroVertex.excessFlow = 0;
     vertexList.resize(numVertices, zeroVertex);
     vertexList[sourceId].height = numVertices;
     
@@ -195,7 +196,7 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
             vertexList[to].excessFlow = cap;
             //Do not push sink onto the activeVerticesQueue
             if(to!=sinkId){
-                vertexList[to].isActive = 1;
+                //vertexList[to].isActive = 1;
                 activeVertexQueue.push(to);
             }
         }
@@ -252,7 +253,7 @@ void push( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& edgeL
 	{
         //cout<< "pushing v onto the queue " << w<<endl;
 		outQueue.push(w);
-		vertexList[w].isActive= 1;
+		//vertexList[w].isActive= 1;
 	}
 		
 }
@@ -359,11 +360,10 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
         }
 		relabel(adjList, vertexList, edgeList, v);
 		// release lock of vertex v after relabel
-		vertexList[v].isActive= 1;
+		//vertexList[v].isActive= 1;
 		omp_unset_lock( &vertexLock[v] );
 
-  	outQueue.push(v);
-
+  	    outQueue.push(v);
 	}
 	
 	return;
@@ -382,12 +382,12 @@ void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_
 
     for(int i=0; i<numNewVertices; i++){
         int v= activeVertexQueue.front();
-				activeVertexQueue.pop();
-        omp_set_lock(&vertexLock[v]);
-       	vertexList[v].isActive = 0;
-				inQueue.push(v);
-				omp_unset_lock(&vertexLock[v]);
-    }
+		activeVertexQueue.pop();
+        //omp_set_lock(&vertexLock[v]);
+       	//vertexList[v].isActive = 0;
+		//omp_unset_lock(&vertexLock[v]);
+		inQueue.push(v);
+   }
 
     return;
 }
