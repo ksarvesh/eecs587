@@ -692,9 +692,9 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 			//vertices to the outQueue
         }
         
-        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
-
         omp_set_lock(queueLock);
+        
+        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
             
         //Unset the flag to let all the processors know that this

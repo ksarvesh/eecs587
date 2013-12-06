@@ -684,12 +684,11 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 			//TODO: don't wait for the entire inQueue to be discharged before pushing out 
 			//vertices to the outQueue
         }
-
-        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         
         //Re-grab the queueLock before making changes to any of the 
         //shared variables 
         omp_set_lock(queueLock);
+        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
             
         //Increment the total number of discharge operations.
