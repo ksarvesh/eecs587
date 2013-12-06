@@ -42,7 +42,7 @@
 #include <queue>
 #include <fstream>
 #include <assert.h>
-#include <omp.h>
+#include <cstdio>
 
 using namespace std;
 
@@ -534,35 +534,27 @@ void preflow_push(string fileName)
 		return;
 	}
 
-	// apply discharge opeartion until active queue is empty
-	/*while(activeVertexQueue.size() > 0){
+	// wall clock time variable
+	double begin;
+	double end;
 
-		// pop next vertex from queue, mark as not active
-		int v= activeVertexQueue.front();
-		vertexList[v].isActive= 0;		
-		activeVertexQueue.pop();
-
-		//DEBUG
-        cout<<"discharging: "<<v<<endl;
-
-		// discharge vertex until excess becomes 0 or vertex is relabelled
-		discharge(activeVertexQueue, vertexList, edgeList, adjList, v, vertexLock);
-	}*/
+	begin = omp_get_wtime();
+	
     #pragma omp parallel num_threads(NUM_THREADS) 
     {
         startParallelAlgo(activeVertexQueue, vertexList, edgeList, adjList, vertexLock, &queueLock);
-        
+      
         //No thread would reach this spot unless all other threads are already sleeping
         //i.e. only when the last thread tries to go to sleep, it will realize that all 
         //other threads are already asleep, and so it will reach this spot. Hence we need 
         //a NO_WAIT, since the other threads are never going to reach this spot ever.    
     	#pragma omp single
         {
-            if(DEBUG){
+								end = omp_get_wtime(); 
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
+								printf("Elapsed: %f seconds\n", end-begin);
                 omp_unset_lock(&printLock);
-            }
         }
    }
 	

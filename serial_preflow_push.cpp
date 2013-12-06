@@ -3,6 +3,7 @@
 #include <queue>
 #include <fstream>
 #include <assert.h>
+#include <time.h>
 
 using namespace std;
 
@@ -144,7 +145,7 @@ void push( queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edg
 	}
 
 
-    cout<<"pushing "<<send<< " from "<<v<<" to "<<w<<endl;
+   // cout<<"pushing "<<send<< " from "<<v<<" to "<<w<<endl;
 	
 	// update excessFlow 
 	vertexList[v].excessFlow -= send;
@@ -201,7 +202,7 @@ void relabel( vector<vector<int> >& adjList, vector<vertex>& vertexList, vector<
 	}
 	vertexList[v].height = min_height + 1;
 	// DEBUG
-    cout<<"relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
+  //	 cout<<"relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
 }
 
 
@@ -242,7 +243,7 @@ void discharge( queue<int>& activeVertexQueue, vector<vertex>& vertexList, vecto
 	if(vertexList[v].excessFlow > 0){
 
 		// DEBUG
-        cout<< "relabeling vertex "<<v<<endl;
+    //    cout<< "relabeling vertex "<<v<<endl;
 		relabel(adjList, vertexList, edgeList, v);
   	activeVertexQueue.push(v);
 		vertexList[v].isActive= 1;
@@ -265,6 +266,10 @@ void preflow_push(string fileName)
 	vector<vector<int> > adjList;
 	queue<int> activeVertexQueue;
 
+	clock_t begin, end;
+	double time_spent;
+	begin = clock();
+
 	// populate data structures from input text file, push all possible flow out of 
 	// source vertex
 	int ret= initialize(fileName, vertexList, edgeList, adjList, activeVertexQueue);
@@ -281,14 +286,14 @@ void preflow_push(string fileName)
 		activeVertexQueue.pop();
 
 		//DEBUG
-        cout<<"discharging: "<<v<<endl;
+    //    cout<<"discharging: "<<v<<endl;
 
 		// discharge vertex until excess becomes 0 or vertex is relabelled
 		discharge(activeVertexQueue, vertexList, edgeList, adjList, v);
 	}
-	
+	end = clock();
 	cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
-
+	printf("Elapsed %f seconds\n", (double) (end-begin)/CLOCKS_PER_SEC);
 }
 
 /*****************************************************************
