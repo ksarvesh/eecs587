@@ -147,7 +147,7 @@ void random_d_regular(int n, int d, ofstream &out) {
     weight = random_weight();
     
     //Make it compatible to the network flow graph:
-    if(A[i]==sink || A[i+1]==source){
+    if(A[i]==sink || A[i+1]==source || A[i]==A[i+1]){
         continue;
     }
 
