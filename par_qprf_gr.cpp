@@ -59,6 +59,13 @@ using namespace std;
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
 
+//This is a vector of bools used to keep track of those procs
+//that are currently performing a discharge operation. This is 
+//used to prevent any global relabel operation while some proc
+//is still performing a discharge operation.
+vector<bool> isDischarging(NUM_THREADS, 0);
+
+
 //This is the lock used for debugging
 omp_lock_t printLock;
 
