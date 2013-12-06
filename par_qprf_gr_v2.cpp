@@ -184,7 +184,7 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
     //step so that no other processor is allowed to perform
     //a discharge operation at the same time.
     for(int i=0; i<numVertices; i++){
-        omp_set_lock(vertexLock[i]);
+        omp_set_lock(&vertexLock[i]);
     }
 
     if(DEBUG){
@@ -199,6 +199,10 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
     //now, untill this function returns and subsequently the
     //lock is freed in the caller function.
     globalRelabel(adjList, edgeList, vertexList);
+
+    for(int i=0; i<numVertices; i++){
+        omp_unset_lock(&vertexLock[i]);
+    }
     
     return;
 }
