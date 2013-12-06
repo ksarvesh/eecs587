@@ -762,7 +762,7 @@ void preflow_push(string fileName)
                 double end= omp_get_wtime();
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
-                printf("elapsed time: %f secs", end - begin);
+                printf("Elapsed time: %f secs\n", end - begin);
                 omp_unset_lock(&printLock);
            // }
         }
