@@ -524,10 +524,8 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList )
 {
 	int currentEdgeId, residue, v, w, e;	
-	int currentDepth = 0, depthIncrease = 1, nextDepthIncrease = 0; 
 	int isSecondBfs = FALSE;
 
-	//Initialize global relabeling marked array
 	marked = (int*) calloc( numVertices, sizeof(int) );
 
 	// initially put sink vertex into queue
@@ -546,33 +544,13 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 
 			// if queue becomes empty, quit BFS while loop
 			isSecondBfs = TRUE;
-			
-			// reset depth count
-			currentDepth = 0;
-			depthIncrease = 1;
-			nextDepthIncrease = 0;			
 		}
 
 		currentEdgeId = 0;
 		v = bfsQueue.front();
 		bfsQueue.pop();
 
-		// relabel w/ depth
-		if( isSecondBfs==FALSE )
-			vertexList[v].height = currentDepth;
-		else
-			vertexList[v].height = numVertices+currentDepth;
-
-		// keep track of queue depth
-		nextDepthIncrease += adjList[v].size();
-		if( --depthIncrease==0 )
-		{ 
-			depthIncrease = nextDepthIncrease;
-			nextDepthIncrease = 0;
-			currentDepth++;
-		}
-
-		while( currentEdgeId < numberOfEdges )
+		while( currentEdgeId < adjList[v].size() )
 		{ // iterate through each v node edge
 			e = adjList[v][currentEdgeId];
 			
@@ -591,6 +569,9 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 			// if vertex w has not been visited, push into queue and mark
 			if( !marked[w] && residue>0 )
 			{
+				// relabel w/ depth
+				vertexList[w].height = vertexList[v].height+1;
+
 				bfsQueue.push( w );
 				marked[w] = TRUE;
 			}
