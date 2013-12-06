@@ -58,13 +58,7 @@ using namespace std;
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
-
-//This is a vector of bools used to keep track of those procs
-//that are currently performing a discharge operation. This is 
-//used to prevent any global relabel operation while some proc
-//is still performing a discharge operation.
-vector<bool> isDischarging(NUM_THREADS, 0);
-
+int numVertices, numEdges;
 
 //This is the lock used for debugging
 omp_lock_t printLock;
@@ -101,24 +95,6 @@ struct edge{
 // global relabeling data structures
 queue<int> 	bfsQueue;
 vector<int> marked;
-
-
-/*****************************************************************
- * This function is used to find out if any of the processors are
- * currently performing a discharge operation. If so, then it 
- * returns true. Else, it returns false. This function should be 
- * called with the queueLock being held.
-****************************************************************/
-bool isAnyProcessorDischarging(){
-    //This function should be called with the queueLock being held
-    for(int i=0; i<NUM_THREADS; i++){
-        if(isDischarging[i] == true){
-            return true;
-        }
-    }
-
-    return false;
-}
 
 /*****************************************************************
  * The globalRelabel function performs a backwards breadth-first
@@ -198,15 +174,17 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
  * This funtion changes the inputQueue size depending on the 
  * number of idle processors and the number of vertices in the
  * shared queue (activeVertexQueue). The queueLock should be
- * held while calling this function.
+ * unest while calling this function. This will grab all vertex
+ * locks before relabeling since no discharging should occur while
+ * global relabeling is occuring.
  ****************************************************************/
-void doGlobalRelabeling(omp_lock_t* queueLock, vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList){
-    //This function should be called with the queueLock being held
-    while(isAnyProcessorDischarging()){
-        //Spin loop
-        omp_unset_lock(queueLock);
-        //sleep(10ms)
-        omp_set_lock(queueLock);
+void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList){
+  
+    //Grab all vertex locks before doing the global relabel
+    //step so that no other processor is allowed to perform
+    //a discharge operation at the same time.
+    for(int i=0; i<numVertices; i++){
+        omp_set_lock(vertexLock[i]);
     }
 
     if(DEBUG){
@@ -326,7 +304,6 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     
     //Get num vertices and num edges from the first two lines of the file:
     //Also, get the indices of the source and the sink (global variables)
-    int numVertices, numEdges;
     inFile >> numVertices >> numEdges >> sourceId >> sinkId;
 
     //Initilaize the marked vector to be of size numVertices
@@ -658,19 +635,31 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         }
 
-        //Set the flag to let everyother processor know that this processor
-        //is now going to be performing a discharge operation. This shared
-        //variable is also guarded by the queueLock. This is necessary to
-        //prevent any processor from going ahead with a global relabel op
-        //while some other processor is still performing a discharge op.
-        isDischarging[omp_get_thread_num()] = true;
+        //Check if there have been more than 200 discharges. If so,
+        //do a global relabel and check if the buffer size has to be 
+        //modified depending on the number of idle processors.
+        bool isGlobalRelabelingReq= false;
+
+        if(totalNumDischarges > 200){
+            totalNumDischarges = 0;
+            changeBufferSize(activeVertexQueue);
+            isGlobalRelabelingReq= true;
+        }
 
         //At this point, this processor still holds the shared activeVertexQueue 
         //lock. Also, at this point, the inQueue is non zero in size.
         //We can give up the shared queue lock at this point since we are not
         //acessing the shared variable any more.
         omp_unset_lock(queueLock);
-
+        
+        //Do a global relabeling without the queue lock being held
+        //This is so because the lock need not be held. Only all the
+        //vertex locks need to be held instream.
+        if(isGlobalRelabelingReq){
+            doGlobalRelabeling(vertexLock, adjList, edgeList, vertexList);
+        }
+        
+        
         //store the current size of the inQueue so that once all discharges 
         //are complete, we can update the total number of discharges that 
         //happened in this cycle.
@@ -684,27 +673,17 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 			//TODO: don't wait for the entire inQueue to be discharged before pushing out 
 			//vertices to the outQueue
         }
-        
-        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
 
+        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
+        
+        //Re-grab the queueLock before making changes to any of the 
+        //shared variables 
         omp_set_lock(queueLock);
         pushNewVertex(outQueue, activeVertexQueue);
             
-        //Unset the flag to let all the processors know that this
-        //processor is done with its current discharge cycle.
-        isDischarging[omp_get_thread_num()] = false;
-        
         //Increment the total number of discharge operations.
         totalNumDischarges+= numDischarges;
-        
-        //Check if there have been more than 200 discharges. If so,
-        //do a global relabel and check if the buffer size has to be 
-        //modified depending on the number of idle processors.
-        if(totalNumDischarges > 200){
-            totalNumDischarges = 0;
-            changeBufferSize(activeVertexQueue);
-            doGlobalRelabeling(queueLock, adjList, edgeList, vertexList);
-        }
+
    }
 
 }
