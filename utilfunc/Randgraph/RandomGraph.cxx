@@ -7,8 +7,8 @@
 
 #include <stdlib.h>
 #include <time.h>
-#include <iostream.h>
-#include <fstream.h>
+#include <iostream>
+#include <fstream>
 #include <math.h>
 
 #include "UF.h"
@@ -136,6 +136,8 @@ void random_d_regular(int n, int d, ofstream &out) {
   int i;
   double weight;
 
+  int source =0, sink = n-1;
+
   if(n*d % 2) { cout << "d or n must be even\n"; return; }
   for(i=0;i<n*d;i++)
     A[i] = i/d;
@@ -143,6 +145,12 @@ void random_d_regular(int n, int d, ofstream &out) {
   out << n << "\n";
   for(i=0;i<n*d;i+=2) {
     weight = random_weight();
+    
+    //Make it compatible to the network flow graph:
+    if(A[i]==sink || A[i+1]==source){
+        continue;
+    }
+
     out << A[i] << " " << A[i+1] << " " << weight << "\n";
   }
   out << "-1";
