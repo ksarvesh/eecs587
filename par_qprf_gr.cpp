@@ -557,15 +557,22 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 
 void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_lock_t>& vertexLock, vector<vertex>& vertexList){
-    int numNewVertices= MIN(inputQueueSize - inQueue.size(), activeVertexQueue.size());
+    int minSize= inputQueueSize - inQueue.size();
+    minSize= minSize > 0 ? minSize : 0;
+    
+    int numNewVertices= MIN(minSize, activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
         int v= activeVertexQueue.front();
 		activeVertexQueue.pop();
-        //omp_set_lock(&vertexLock[v]);
-       	//vertexList[v].isActive = 0;
-		//omp_unset_lock(&vertexLock[v]);
-		inQueue.push(v);
+
+        if(DEBUG){
+         omp_set_lock(&printLock);
+         cout<<omp_get_thread_num()<<" is popping vertex "<<v<<" from the shared queue"<<endl;
+         omp_unset_lock(&printLock);
+        }
+		
+        inQueue.push(v);
    }
 
     return;

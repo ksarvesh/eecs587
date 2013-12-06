@@ -378,6 +378,7 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 
 void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_lock_t>& vertexLock, vector<vertex>& vertexList){
+    
     int numNewVertices= MIN(IN_OUT_QUEUE_SIZE - inQueue.size(), activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
