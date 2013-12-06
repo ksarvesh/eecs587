@@ -116,7 +116,7 @@ bool isAnyProcessorDischarging(){
         }
     }
 
-    return true;
+    return false;
 }
 
 /*****************************************************************
