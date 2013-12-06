@@ -36,7 +36,7 @@ int main(int argc, char** argv){
     }
 
     out<<numEdges<<"\n";
-
+		out<<"0"<<" "<<numVertices-1<<"\n";
 
     in.close();
 

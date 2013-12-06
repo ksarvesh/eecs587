@@ -573,14 +573,15 @@ void preflow_push(string fileName)
  * given an input text file. 
  *
  ****************************************************************/
-int main()
+int main(int argc, char** argv)
 {
 	// read input text file containing graph with vertices, edges, and 
 	// corresponding edges capacities
-	//
+	
+	
 
-    omp_init_lock(&printLock);
-	preflow_push("test/test1.txt");
+   omp_init_lock(&printLock);
+	preflow_push(argv[1]);
   return(0);
 }
 

@@ -296,12 +296,19 @@ void preflow_push(string fileName)
  * given an input text file. 
  *
  ****************************************************************/
-int main()
+int main(int argc, char** argv)
 {
+
+	if(argc < 2){
+		cout << "usage: ./a.out <filename> " << endl;
+	}
+	
+	string fileName(argv[1]);
+	
 	// read input text file containing graph with vertices, edges, and 
 	// corresponding edges capacities
 	//
-	preflow_push("test/test1.txt");
+	preflow_push(fileName.c_str());
   return(0);
 }
 
