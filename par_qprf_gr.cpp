@@ -9,7 +9,8 @@
  *
  * The general approach is to maintain a global work queue which keeps track of the
  * active vertices, applies push operations to them, possibly relables them, and puts
- * any newly activated vertices back in the queue. 
+ * any newly activated vertices back in the queue. This version dynamically changes the
+ * size of the input and the output queue, making it more efficient.
  *
  * ACTIVE QUEUE:
  * The queue for active vertices is divided in two: one shared, and the other local to 
@@ -39,7 +40,7 @@
  * 
  *
  ***************************************************************************************/
-#include <omp.h>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <queue>
@@ -758,6 +759,9 @@ void preflow_push(string fileName)
 		// discharge vertex until excess becomes 0 or vertex is relabelled
 		discharge(activeVertexQueue, vertexList, edgeList, adjList, v, vertexLock);
 	}*/
+
+    double begin= omp_get_wtime();
+
     #pragma omp parallel num_threads(NUM_THREADS) 
     {
         startParallelAlgo(activeVertexQueue, vertexList, edgeList, adjList, vertexLock, &queueLock);
@@ -766,11 +770,15 @@ void preflow_push(string fileName)
         //i.e. only when the last thread tries to go to sleep, it will realize that all 
         //other threads are already asleep, and so it will reach this spot. Hence we need 
         //a NO_WAIT, since the other threads are never going to reach this spot ever.    
-    	#pragma omp single
+    	
+        
+        #pragma omp single
         {
-           // if(DEBUG){
+               // if(DEBUG){
+                double end= omp_get_wtime();
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
+                printf("elapsed time: %f secs", end - begin);
                 omp_unset_lock(&printLock);
            // }
         }

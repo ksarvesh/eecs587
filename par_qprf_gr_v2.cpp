@@ -1,6 +1,6 @@
 /****************************************************************************************
  * 
- * Program: par_qprf_gr.cpp
+ * Program: par_qprf_gr_v2.cpp
  * Authors: Adrian Montero and Sarversh Kirthivasan
  *
  * DESCRIPTION:
@@ -9,7 +9,12 @@
  *
  * The general approach is to maintain a global work queue which keeps track of the
  * active vertices, applies push operations to them, possibly relables them, and puts
- * any newly activated vertices back in the queue. 
+ * any newly activated vertices back in the queue. This version also dynamically changes
+ * the size of the inQueue and the outQueue there by making it more efficient.
+ * 
+ * This is different from version 1 in that this does not do a busy wait while trying 
+ * to do the global relabel operation. It acquires all vertexLocks instead of the 
+ * queueLock. This approach is more parallel. 
  *
  * ACTIVE QUEUE:
  * The queue for active vertices is divided in two: one shared, and the other local to 
@@ -39,7 +44,7 @@
  * 
  *
  ***************************************************************************************/
-#include <omp.h>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <queue>
@@ -53,7 +58,7 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 4
+#define NUM_THREADS 2
 #define DEBUG 0
 
 // {s,t} read from input file
@@ -67,7 +72,7 @@ omp_lock_t printLock;
 //This will be changed by holding the queueLock since we do
 //not want anything to access the queue while the number of
 //vertices to be grabbed from the queue is being modified.
-int inputQueueSize = 1;
+int inputQueueSize = 10;
 
 //This is to keep a track of how many discharges have happened.
 //Once the num of discharges (over all processors) has reached 
@@ -740,6 +745,9 @@ void preflow_push(string fileName)
 		// discharge vertex until excess becomes 0 or vertex is relabelled
 		discharge(activeVertexQueue, vertexList, edgeList, adjList, v, vertexLock);
 	}*/
+    
+    double begin= omp_get_wtime();
+
     #pragma omp parallel num_threads(NUM_THREADS) 
     {
         startParallelAlgo(activeVertexQueue, vertexList, edgeList, adjList, vertexLock, &queueLock);
@@ -751,8 +759,10 @@ void preflow_push(string fileName)
     	#pragma omp single
         {
            // if(DEBUG){
+                double end= omp_get_wtime();
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
+                printf("elapsed time: %f secs", end - begin);
                 omp_unset_lock(&printLock);
            // }
         }
