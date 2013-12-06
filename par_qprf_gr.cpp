@@ -53,13 +53,33 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 2
-#define IN_OUT_QUEUE_SIZE 1
+#define NUM_THREADS 4
 #define DEBUG 1
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
+
+//This is a vector of bools used to keep track of those procs
+//that are currently performing a discharge operation. This is 
+//used to prevent any global relabel operation while some proc
+//is still performing a discharge operation.
+vector<bool> isDischarging(NUM_THREADS, 0);
+
+//This is the lock used for debugging
 omp_lock_t printLock;
+
+//This basically says what the size of the inQueue should be.
+//This will be changed by holding the queueLock since we do
+//not want anything to access the queue while the number of
+//vertices to be grabbed from the queue is being modified.
+int inputQueueSize = 1;
+
+//This is to keep a track of how many discharges have happened.
+//Once the num of discharges (over all processors) has reached 
+//a threshold amount, it will reset the count to 0 and call 
+//changeBufferSize and doGlobalRelabeling.
+int totalNumDischarges= 0;
+
 
 // data structure to represent graph vertices 
 struct vertex{
@@ -79,7 +99,155 @@ struct edge{
 
 // global relabeling data structures
 queue<int> 	bfsQueue;
-int 				*marked;
+vector<int> marked;
+
+
+/*****************************************************************
+ * This function is used to find out if any of the processors are
+ * currently performing a discharge operation. If so, then it 
+ * returns true. Else, it returns false. This function should be 
+ * called with the queueLock being held.
+****************************************************************/
+bool isAnyProcessorDischarging(){
+    //This function should be called with the queueLock being held
+    for(int i=0; i<NUM_THREADS; i++){
+        if(isDischarging[i] == true){
+            return true;
+        }
+    }
+
+    return true;
+}
+
+/*****************************************************************
+ * The globalRelabel function performs a backwards breadth-first
+ * search (BFS) on the residual graph from the sink and from the 
+ * source. The labels are updated to be the exact distance in number
+ * of edges from each vertex to the sink or, when a vertex cannot 
+ * reach the sink, the exact distance to the source plus n. 
+ *
+ * Global relabeling is applied periodically to improve the 
+ * performance of the push/relabel algorithm.
+ *
+ ****************************************************************/
+void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList )
+{
+	int currentEdgeId, residue, v, w, e;	
+	int isSecondBfs = FALSE;
+    
+    //Reset the values of marked to be all zeros
+    for(int i=0; i<marked.size(); i++){
+        marked[i]= 0;
+    }
+    
+	// initially put sink vertex into queue
+	bfsQueue.push( sinkId );
+
+	// mark source and sink, they should never be pushed into queue
+	marked[sinkId] = TRUE;
+	marked[sourceId] = TRUE;
+
+	while( !bfsQueue.empty() || isSecondBfs==FALSE )
+	{
+		// reset breadth-first search after done with sink 
+		if( bfsQueue.empty() )
+		{ // now backward BFS starting on source
+			bfsQueue.push( sourceId );			
+
+			// if queue becomes empty, quit BFS while loop
+			isSecondBfs = TRUE;
+		}
+
+		currentEdgeId = 0;
+		v = bfsQueue.front();
+		bfsQueue.pop();
+
+		while( currentEdgeId < adjList[v].size() )
+		{ // iterate through each v node edge
+			e = adjList[v][currentEdgeId];
+			
+			// need to know if forward or backward edge
+			if(edgeList[e].from == v)
+			{ // backward edge
+				w= edgeList[e].to;
+				residue = edgeList[e].flow;
+			}
+			else
+			{ // forward edge
+				w= edgeList[e].from;
+				residue = edgeList[e].capacity - edgeList[e].flow;
+			}
+
+			// if vertex w has not been visited, push into queue and mark
+			if( !marked[w] && residue>0 )
+			{
+				// relabel w/ depth
+				vertexList[w].height = vertexList[v].height+1;
+
+				bfsQueue.push( w );
+				marked[w] = TRUE;
+			}
+			// next edge
+			currentEdgeId++;
+		}
+	}
+}
+
+/*****************************************************************
+ * This funtion changes the inputQueue size depending on the 
+ * number of idle processors and the number of vertices in the
+ * shared queue (activeVertexQueue). The queueLock should be
+ * held while calling this function.
+ ****************************************************************/
+void doGlobalRelabeling(omp_lock_t* queueLock, vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList){
+    //This function should be called with the queueLock being held
+    while(isAnyProcessorDischarging()){
+        //Spin loop
+        omp_unset_lock(queueLock);
+        //sleep(10ms)
+        omp_set_lock(queueLock);
+    }
+
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is doing a global relabelling"<<endl;
+        omp_unset_lock(&printLock);
+    }
+
+    //At this stage, the queueLock is held and no processor is
+    //currently performing any discharge operation. There is 
+    //no way a processor can start performing a discharge op
+    //now, untill this function returns and subsequently the
+    //lock is freed in the caller function.
+    globalRelabel(adjList, edgeList, vertexList);
+    
+    return;
+}
+
+/*****************************************************************
+ * This funtion changes the inputQueue size depending on the 
+ * number of idle processors and the number of vertices in the
+ * shared queue (activeVertexQueue). The queueLock should be
+ * held while calling this function.
+ ****************************************************************/
+void changeBufferSize(queue<int>& activeVertexQueue){
+    //This function should be called with the queueLock being held
+    int numActiveProcessors = NUM_THREADS - numIdleProcessors;
+    int numActiveVertices = activeVertexQueue.size();
+    
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is changing the buffer size"<<endl;
+        omp_unset_lock(&printLock);
+    }
+
+    
+    if(numIdleProcessors >= 2 || numIdleProcessors >= .15*NUM_THREADS){
+        inputQueueSize/=2;
+    }else if( numActiveProcessors + ((double)numActiveVertices/inputQueueSize) > 1.5*NUM_THREADS){
+        inputQueueSize*=2;
+    }
+}
 
 /*****************************************************************
  * This function takes to vertex indexes and locks the vertex 
@@ -159,14 +327,17 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     //Also, get the indices of the source and the sink (global variables)
     int numVertices, numEdges;
     inFile >> numVertices >> numEdges >> sourceId >> sinkId;
+
+    //Initilaize the marked vector to be of size numVertices
+    marked.resize(numVertices,0);
    
-		// Initilize queue and vertex locks
-		omp_init_lock( queueLock_ptr );
-		vertexLock.resize(numVertices);
-		for( int i=0;i>numVertices;i++ )
-		{
-			omp_init_lock( &vertexLock[i] );
-		}
+	// Initilize queue and vertex locks
+	omp_init_lock( queueLock_ptr );
+	vertexLock.resize(numVertices);
+	for( int i=0;i>numVertices;i++ )
+	{
+		omp_init_lock( &vertexLock[i] );
+	}
  
     //Initialize the vertexList such that all vertices except for the source
     //has a height of zero. Set all excess flow to zero initially.
@@ -385,7 +556,7 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 
 void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_lock_t>& vertexLock, vector<vertex>& vertexList){
-    int numNewVertices= MIN(IN_OUT_QUEUE_SIZE - inQueue.size(), activeVertexQueue.size());
+    int numNewVertices= MIN(inputQueueSize - inQueue.size(), activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
         int v= activeVertexQueue.front();
@@ -436,8 +607,6 @@ void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
  * of the idleProcessor wait queue are woken up when ever there
  * are new elements pushed onto the activeVertexQueue.
  ****************************************************************/
-
-
 void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edge>& edgeList, vector<vector<int> >& adjList, vector<omp_lock_t>& vertexLock, omp_lock_t* queueLock){
     queue<int> inQueue, outQueue;
     
@@ -452,7 +621,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         }*/
         
         //Get new vertices from the shared queue if the size of the current input buffer
-        //is smaller than the size we set in IN_OUT_QUEUE_SIZE
+        //is smaller than the size we set in inputQueueSize
         getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         
         //Spin loop (busy wait) implementation of cpu sleep
@@ -468,12 +637,12 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             
             if(numIdleProcessors == NUM_THREADS || isCompleted){
                 isCompleted= 1;
-        				if(DEBUG){
-            			omp_set_lock(&printLock);
-            			cout<<"size of shared: "<<activeVertexQueue.size()<<" size of inQueue: "<<inQueue.size()<<" outQueue.size() "<<outQueue.size()<<endl;
-            			omp_unset_lock(&printLock);
+        	    if(DEBUG){
+                	omp_set_lock(&printLock);
+            		cout<<"size of shared: "<<activeVertexQueue.size()<<" size of inQueue: "<<inQueue.size()<<" outQueue.size() "<<outQueue.size()<<endl;
+            		omp_unset_lock(&printLock);
                 }
-								omp_unset_lock(queueLock);
+				omp_unset_lock(queueLock);
                 return;
             }
             
@@ -488,99 +657,52 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         }
 
+        //Set the flag to let everyother processor know that this processor
+        //is now going to be performing a discharge operation. This shared
+        //variable is also guarded by the queueLock. This is necessary to
+        //prevent any processor from going ahead with a global relabel op
+        //while some other processor is still performing a discharge op.
+        isDischarging[omp_get_thread_num()] = true;
+
         //At this point, this processor still holds the shared activeVertexQueue 
         //lock. Also, at this point, the inQueue is non zero in size.
         //We can give up the shared queue lock at this point since we are not
         //acessing the shared variable any more.
         omp_unset_lock(queueLock);
 
+        //store the current size of the inQueue so that once all discharges 
+        //are complete, we can update the total number of discharges that 
+        //happened in this cycle.
+        int numDischarges= inQueue.size();
+
         //Start processing the vertices on the inQueue
         while(!inQueue.empty()){
             int v= inQueue.front();
             inQueue.pop();
             discharge(outQueue, vertexList, edgeList, adjList, v, vertexLock);
-						//TODO: don't wait for the entire inQueue to be discharged before pushing out 
-						//vertices to the outQueue
+			//TODO: don't wait for the entire inQueue to be discharged before pushing out 
+			//vertices to the outQueue
         }
 
         getNewVertex(inQueue, outQueue, vertexLock, vertexList);
 
         omp_set_lock(queueLock);
         pushNewVertex(outQueue, activeVertexQueue);
+            
+        //Increment the total number of discharge operations.
+        totalNumDischarges+= numDischarges;
+
+        //Check if there have been more than 200 discharges. If so,
+        //do a global relabel and check if the buffer size has to be 
+        //modified depending on the number of idle processors.
+        if(totalNumDischarges > 200){
+            totalNumDischarges = 0;
+            changeBufferSize(activeVertexQueue);
+            doGlobalRelabeling(queueLock, adjList, edgeList, vertexList);
+        }
    }
 
 }
-/*****************************************************************
- * The globalRelabel function performs a backwards breadth-first
- * search (BFS) on the residual graph from the sink and from the 
- * source. The labels are updated to be the exact distance in number
- * of edges from each vertex to the sink or, when a vertex cannot 
- * reach the sink, the exact distance to the source plus n. 
- *
- * Global relabeling is applied periodically to improve the 
- * performance of the push/relabel algorithm.
- *
- ****************************************************************/
-void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList )
-{
-	int currentEdgeId, residue, v, w, e;	
-	int isSecondBfs = FALSE;
-
-	marked = (int*) calloc( numVertices, sizeof(int) );
-
-	// initially put sink vertex into queue
-	bfsQueue.push( sinkId );
-
-	// mark source and sink, they should never be pushed into queue
-	marked[sinkId] = TRUE;
-	marked[sourceId] = TRUE;
-
-	while( !bfsQueue.empty() || isSecondBfs==FALSE )
-	{
-		// reset breadth-first search after done with sink 
-		if( bfsQueue.empty() )
-		{ // now backward BFS starting on source
-			bfsQueue.push( sourceId );			
-
-			// if queue becomes empty, quit BFS while loop
-			isSecondBfs = TRUE;
-		}
-
-		currentEdgeId = 0;
-		v = bfsQueue.front();
-		bfsQueue.pop();
-
-		while( currentEdgeId < adjList[v].size() )
-		{ // iterate through each v node edge
-			e = adjList[v][currentEdgeId];
-			
-			// need to know if forward or backward edge
-			if(edgeList[e].from == v)
-			{ // backward edge
-				w= edgeList[e].to;
-				residue = edgeList[e].flow;
-			}
-			else
-			{ // forward edge
-				w= edgeList[e].from;
-				residue = edgeList[e].capacity - edgeList[e].flow;
-			}
-
-			// if vertex w has not been visited, push into queue and mark
-			if( !marked[w] && residue>0 )
-			{
-				// relabel w/ depth
-				vertexList[w].height = vertexList[v].height+1;
-
-				bfsQueue.push( w );
-				marked[w] = TRUE;
-			}
-			// next edge
-			currentEdgeId++;
-		}
-	}
-}
-
 
 /*****************************************************************
  * The preflow_push function takes as input a text file, dynamically
@@ -649,14 +771,23 @@ void preflow_push(string fileName)
  * given an input text file. 
  *
  ****************************************************************/
-int main()
+int main(int argc, char** argv)
 {
-	// read input text file containing graph with vertices, edges, and 
-	// corresponding edges capacities
-	//
+	//The second argument is the name of the file from which 
+    //the function should read the data regarding the graph
+    if(argc < 2){
+        cout << "Usage: ./a.out <fileName>" << endl;
+        return(-1);
+    }
 
+    string fileName(argv[1]);
+    
+
+    // read input text file containing graph with vertices, edges, and 
+	// corresponding edges capacities
     omp_init_lock(&printLock);
-	preflow_push("test/test1.txt");
-  return(0);
+	preflow_push(fileName.c_str());
+    
+    return(0);
 }
 
