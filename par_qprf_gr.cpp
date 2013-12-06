@@ -683,15 +683,19 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 			//TODO: don't wait for the entire inQueue to be discharged before pushing out 
 			//vertices to the outQueue
         }
-
+        
         getNewVertex(inQueue, outQueue, vertexLock, vertexList);
 
         omp_set_lock(queueLock);
         pushNewVertex(outQueue, activeVertexQueue);
             
+        //Unset the flag to let all the processors know that this
+        //processor is done with its current discharge cycle.
+        isDischarging[omp_get_thread_num()] = false;
+        
         //Increment the total number of discharge operations.
         totalNumDischarges+= numDischarges;
-
+        
         //Check if there have been more than 200 discharges. If so,
         //do a global relabel and check if the buffer size has to be 
         //modified depending on the number of idle processors.
