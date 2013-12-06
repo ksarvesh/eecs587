@@ -52,7 +52,7 @@ using namespace std;
 #define INFINITE 10000000
 #define NUM_THREADS 2
 #define IN_OUT_QUEUE_SIZE 1
-#define DEBUG 1
+#define DEBUG 0
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -82,7 +82,13 @@ struct edge{
  *
  ****************************************************************/
 void vertex_lock( vector<omp_lock_t>& vertexLock, int v, int w, int lock )
-{
+{  
+			if(DEBUG && lock){
+       	omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" trying to acquire locks " << v << " and " << w<<endl;
+        omp_unset_lock(&printLock);
+       }
+
 	// get locks v and w, to avoid deadlock grab first vertex with the
 	// minimum index
 	if( MIN( v,w ) == v )
@@ -112,6 +118,12 @@ void vertex_lock( vector<omp_lock_t>& vertexLock, int v, int w, int lock )
 			omp_unset_lock( &vertexLock[w] );
 		}
 	}
+
+	if(DEBUG && lock){
+   	omp_set_lock(&printLock);
+    cout<<omp_get_thread_num()<<" has acquired locks " << v << " and " << w<<endl;
+    omp_unset_lock(&printLock);
+   }
 }
 
 
@@ -382,13 +394,17 @@ void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_
     int numNewVertices= MIN(IN_OUT_QUEUE_SIZE - inQueue.size(), activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
-        int v= activeVertexQueue.front();
-		activeVertexQueue.pop();
-        //omp_set_lock(&vertexLock[v]);
-       	//vertexList[v].isActive = 0;
-		//omp_unset_lock(&vertexLock[v]);
-		inQueue.push(v);
-   }
+      int v= activeVertexQueue.front();
+			activeVertexQueue.pop();
+			
+		  if(DEBUG){
+       	omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is popping vertex "<<v<<" from the shared queue"<<endl;
+        omp_unset_lock(&printLock);
+       }
+
+    	inQueue.push(v);
+   	}
 
     return;
 }
@@ -435,7 +451,17 @@ void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
 void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList, vector<edge>& edgeList, vector<vector<int> >& adjList, vector<omp_lock_t>& vertexLock, omp_lock_t* queueLock){
     queue<int> inQueue, outQueue;
     
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<"thread "<<omp_get_thread_num()<<" is trying to acquire queue lock" <<endl;
+	    omp_unset_lock(&printLock);
+    }
     omp_set_lock(queueLock);
+    if(DEBUG){
+        omp_set_lock(&printLock);
+        cout<<"thread "<<omp_get_thread_num()<<" has acquired queue lock" <<endl;
+	    omp_unset_lock(&printLock);
+    }
     
     while(1){
 
@@ -454,11 +480,11 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         while(inQueue.empty()){
             numIdleProcessors++;
             
-            /*if(DEBUG){
+            if(DEBUG){
                 omp_set_lock(&printLock);
-                cout<<isCompleted<<" "<<endl; 
+                cout<<"Thread: "<<omp_get_thread_num()<<" is Completed" <<endl; 
                 omp_unset_lock(&printLock);
-            }*/
+            }
             
             if(numIdleProcessors == NUM_THREADS || isCompleted){
                 isCompleted= 1;
@@ -474,7 +500,17 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             //Busy wait loop
             omp_unset_lock(queueLock);
             //TODO:sleep(10ms);
+   				   if(DEBUG){
+   				       omp_set_lock(&printLock);
+   				       cout<<"thread "<<omp_get_thread_num()<<" is trying to acquire queue lock" <<endl;
+	 				     omp_unset_lock(&printLock);
+   				   }
             omp_set_lock(queueLock);
+   				  if(DEBUG){
+   				      omp_set_lock(&printLock);
+   				      cout<<"thread "<<omp_get_thread_num()<<" has acquired queue lock" <<endl;
+	 				    omp_unset_lock(&printLock);
+   				  }
             
             //TODO: What if we put the -- outside the while loop,
             //will that still work. Which will be more efficient.
@@ -499,7 +535,17 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 
         getNewVertex(inQueue, outQueue, vertexLock, vertexList);
 
+   		   if(DEBUG){
+   			     omp_set_lock(&printLock);
+   				   cout<<"thread "<<omp_get_thread_num()<<" is trying to acquire queue lock" <<endl;
+	 				   omp_unset_lock(&printLock);
+   			 }
         omp_set_lock(queueLock);
+   		  if(DEBUG){
+   		      omp_set_lock(&printLock);
+   		      cout<<"thread "<<omp_get_thread_num()<<" has acquired queue lock" <<endl;
+	 		    omp_unset_lock(&printLock);
+   		  }
         pushNewVertex(outQueue, activeVertexQueue);
    }
 

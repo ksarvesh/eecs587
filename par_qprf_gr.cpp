@@ -54,7 +54,7 @@ using namespace std;
 #define FALSE 0
 #define INFINITE 10000000
 #define NUM_THREADS 4
-#define DEBUG 1
+#define DEBUG 0
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -768,11 +768,11 @@ void preflow_push(string fileName)
         //a NO_WAIT, since the other threads are never going to reach this spot ever.    
     	#pragma omp single
         {
-            if(DEBUG){
+           // if(DEBUG){
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
                 omp_unset_lock(&printLock);
-            }
+           // }
         }
    }
 	
