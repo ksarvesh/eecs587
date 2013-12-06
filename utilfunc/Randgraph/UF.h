@@ -1,4 +1,4 @@
-#include<iostream.h>
+#include<iostream>
 
 // A union-find element keeps its rank and the id of its parent.
 

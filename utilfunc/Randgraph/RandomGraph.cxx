@@ -153,7 +153,7 @@ void random_d_regular(int n, int d, ofstream &out) {
 
     out << A[i] << " " << A[i+1] << " " << weight << "\n";
   }
-  out << "-1";
+  //out << "-1";
   delete[] A;
 }
 
