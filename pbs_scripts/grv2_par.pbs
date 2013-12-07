@@ -1,0 +1,25 @@
+#!/bin/sh
+#PBS -S /bin/sh
+#PBS -N grv2_par_1p_10000000
+#PBS -l nodes=1:ppn=12,pmem=1gb,walltime=04:00:00
+#PBS -A eecs587f13_flux
+#PBS -l qos=flux
+#PBS -q flux
+# #PBS -M admo@umich.edu
+# #PBS -m abe
+#PBS -j oe
+#PBS -V
+#
+
+MPPROG="grv2_par_1p test/randgraph_10000000.txt"
+
+echo "I ran on:"
+cat $PBS_NODEFILE
+
+# Create a local directory to run from and copy your files to it.
+# Let PBS handle your output
+cd ~admo/final_project/git_rep/
+
+# Use mpirun to run w/ 2 cores
+./$MPPROG
+

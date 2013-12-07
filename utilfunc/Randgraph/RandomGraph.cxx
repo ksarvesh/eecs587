@@ -84,7 +84,7 @@ double random_weight() {
   case 10:
     return(random_weight_normal(0.8,200));
   case 11:
-    return(floor(random_weight_uniform(100000.0)));
+    return(floor(random_weight_uniform(10000.0)));
     break;
   case 12:
     return(floor(random_weight_loguniform(11.0)));
@@ -612,7 +612,7 @@ int main(int argv, char** args) {
 	 << "     - 8 - normal dist, mean = M * .5\n"
 	 << "     - 9 - normal dist, mean = M * .2\n"
 	 << "     - 10 - normal dist, mean = M * .8\n"
-	 << "     - 11 - INTEGER uniform in [0,100000]\n"
+	 << "     - 11 - INTEGER uniform in [0,10000]\n"
 	 << "     - 12 - INTEGER log-uniform in [0,17]\n"
 	 << "dens - graph density (interpretation depends on type)\n"
 	 << "seed - random seed (default = current time)\n\n"
