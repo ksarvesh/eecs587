@@ -58,8 +58,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 12
+#define NUM_THREADS 8
 #define DEBUG 0
+#define TIMING 1
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -184,7 +185,10 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
  * global relabeling is occuring.
  ****************************************************************/
 void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList){
-  
+ 
+    //Check the time for each global relabelling:
+    double startTime= omp_get_wtime();
+
     //Grab all vertex locks before doing the global relabel
     //step so that no other processor is allowed to perform
     //a discharge operation at the same time.
@@ -208,7 +212,16 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
     for(int i=0; i<numVertices; i++){
         omp_unset_lock(&vertexLock[i]);
     }
-    
+
+    //Time the global relabel operation and print:
+    double endTime= omp_get_wtime();
+
+    if(TIMING){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" took "<<endTime-startTime<<" time to do globalRelabeling"<<endl;
+        omp_unset_lock(&printLock);
+    }
+
     return;
 }
 
@@ -219,6 +232,10 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
  * held while calling this function.
  ****************************************************************/
 void changeBufferSize(queue<int>& activeVertexQueue){
+    
+    //Time the changeBufferSize function:
+    double startTime= omp_get_wtime();
+
     //This function should be called with the queueLock being held
     int numActiveProcessors = NUM_THREADS - numIdleProcessors;
     int numActiveVertices = activeVertexQueue.size();
@@ -234,6 +251,20 @@ void changeBufferSize(queue<int>& activeVertexQueue){
         inputQueueSize/=2;
     }else if( numActiveProcessors + ((double)numActiveVertices/inputQueueSize) > 1.5*NUM_THREADS){
         inputQueueSize*=2;
+    }
+
+    //If the inputQueueSize is made zero, change it to size 1.
+    //This is to prevent pre-mature termination of the algorithm.
+    inputQueueSize= inputQueueSize == 0 ? 1 : inputQueueSize;
+
+
+    //Time the global relabel operation and print:
+    double endTime= omp_get_wtime();
+
+    if(TIMING){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" took "<<endTime-startTime<<" time to change the bufferSize"<<endl;
+        omp_unset_lock(&printLock);
     }
 }
 

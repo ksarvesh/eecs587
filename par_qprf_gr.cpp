@@ -54,8 +54,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 12
+#define NUM_THREADS 8
 #define DEBUG 0
+#define DEBUG_temp 0
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -249,6 +250,19 @@ void changeBufferSize(queue<int>& activeVertexQueue){
     }else if( numActiveProcessors + ((double)numActiveVertices/inputQueueSize) > 1.5*NUM_THREADS){
         inputQueueSize*=2;
     }
+
+
+    if(inputQueueSize == 0 && DEBUG_temp){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is changing the buffer size and making it size 0"<<endl;
+        cout<<"numIdle processors: "<<numIdleProcessors<<" numActive vertices: "<<numActiveVertices<<endl;
+        omp_unset_lock(&printLock);
+    }
+    
+    //This is to make sure the input size does not become zero.
+    //If it is set to zero, reset to 1 to prevent pre-mature termiation
+    //of the algorithm.
+    inputQueueSize = inputQueueSize == 0 ? 1 : inputQueueSize;
 }
 
 /*****************************************************************
@@ -590,7 +604,15 @@ void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_
  * ****************************************************************/
 
 
-void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
+void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue, queue<int>& inQueue){
+
+   if(DEBUG_temp && inputQueueSize==1){
+   	omp_set_lock(&printLock);
+    cout<<omp_get_thread_num()<<" has outQueueSize "<<outQueue.size()<<" and inQueue size: " << inQueue.size()<<endl;
+    cout<< "inQueue.front()" << inQueue.front() <<endl;
+    omp_unset_lock(&printLock);
+   }
+
    while(!outQueue.empty()){
        int v= outQueue.front();
        if(DEBUG){
@@ -598,7 +620,7 @@ void pushNewVertex(queue<int>& outQueue, queue<int>& activeVertexQueue){
         cout<<omp_get_thread_num()<<" is pushing vertex "<<v<<" into the shared queue"<<endl;
         omp_unset_lock(&printLock);
        }
-			 outQueue.pop();
+       outQueue.pop();
        activeVertexQueue.push(v);
    }
    return;
@@ -696,7 +718,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         omp_set_lock(queueLock);
         
         getNewVertex(inQueue, outQueue, vertexLock, vertexList);
-        pushNewVertex(outQueue, activeVertexQueue);
+        pushNewVertex(outQueue, activeVertexQueue, inQueue);
             
         //Unset the flag to let all the processors know that this
         //processor is done with its current discharge cycle.
