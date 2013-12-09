@@ -690,8 +690,10 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             }
             
             //Busy wait loop
+            double startTime= omp_get_wtime();
             omp_unset_lock(queueLock);
             //TODO:sleep(10ms);
+            while(omp_get_wtime()-startTime > .010);
             omp_set_lock(queueLock);
             
             //TODO: What if we put the -- outside the while loop,
