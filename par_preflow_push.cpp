@@ -50,8 +50,8 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
-#define IN_OUT_QUEUE_SIZE 1
+#define NUM_THREADS 2
+#define IN_OUT_QUEUE_SIZE 10
 #define DEBUG 0
 
 // {s,t} read from input file
