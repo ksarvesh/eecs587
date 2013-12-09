@@ -58,9 +58,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 4
+#define NUM_THREADS 12
 #define DEBUG 0
-#define DEBUG_temp 0
+#define DEBUG_temp 1
 #define TIMING 0
 #define BUSY_WAIT 0
 // {s,t} read from input file
@@ -273,6 +273,8 @@ void changeBufferSize(queue<int>& activeVertexQueue){
         cout<<omp_get_thread_num()<<" took "<<endTime-startTime<<" time to change the bufferSize"<<endl;
         omp_unset_lock(&printLock);
     }
+
+
 }
 
 /*****************************************************************
@@ -584,11 +586,6 @@ void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_
     int minSize= inputQueueSize - inQueue.size();
     minSize= minSize > 0 ? minSize : 0;
     
-    if(DEBUG_temp){
-     omp_set_lock(&printLock);
-     cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" minSize "<<minSize<<endl;
-     omp_unset_lock(&printLock);
-    }
    
    int numNewVertices= MIN(minSize, activeVertexQueue.size());
 
@@ -662,7 +659,13 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //is smaller than the size we set in inputQueueSize
         getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         
-        //Spin loop (busy wait) implementation of cpu sleep
+        if(DEBUG){
+            omp_set_lock(&printLock);
+            cout<<"thread "<<omp_get_thread_num()<<" has inQueueSize: "<<inQueue.size()<<" "<<endl; 
+            omp_unset_lock(&printLock);
+        }
+        
+	//Spin loop (busy wait) implementation of cpu sleep
         //that is to be woken up by an interprocessor interrupt
         while(inQueue.empty()){
             numIdleProcessors++;
@@ -703,9 +706,11 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             
             //TODO: What if we put the -- outside the while loop,
             //will that still work. Which will be more efficient.
+   	    //Decrement the number of sleeping cpus:
             numIdleProcessors--;
             getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         }
+	
 
         //Check if there have been more than 200 discharges. If so,
         //do a global relabel and check if the buffer size has to be 
@@ -716,6 +721,13 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             totalNumDischarges = 0;
             changeBufferSize(activeVertexQueue);
             isGlobalRelabelingReq= true;
+	    
+   	    if(DEBUG_temp){
+   	     omp_set_lock(&printLock);
+   	     cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" activeVertices: "<<activeVertexQueue.size();
+   	     cout<<" inQueue.size: "<<inQueue.size()<<" outQueue.size: "<<outQueue.size()<<" numActive: "<<NUM_THREADS - numIdleProcessors<<endl;
+	     omp_unset_lock(&printLock);
+   	    }
         }
 
 	//Keep a local copy of the inputQueueSize so that you do not have to
