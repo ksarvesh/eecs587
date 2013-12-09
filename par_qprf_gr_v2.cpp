@@ -58,9 +58,10 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
+#define NUM_THREADS 4
 #define DEBUG 0
-#define TIMING 1
+#define DEBUG_temp 0
+#define TIMING 0
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -196,9 +197,14 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
         omp_set_lock(&vertexLock[i]);
     }
 
-    if(DEBUG){
+    if(TIMING){
         omp_set_lock(&printLock);
-        cout<<omp_get_thread_num()<<" is doing a global relabelling"<<endl;
+        cout<<omp_get_thread_num()<<" took "<<omp_get_wtime()-startTime<<" time to get locks before globalRelabeling"<<endl;
+        omp_unset_lock(&printLock);
+    }
+    if(TIMING){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" is doing a global relabelling with processorId "<<sched_getcpu()<<endl;
         omp_unset_lock(&printLock);
     }
 
@@ -209,9 +215,6 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
     //lock is freed in the caller function.
     globalRelabel(adjList, edgeList, vertexList);
 
-    for(int i=0; i<numVertices; i++){
-        omp_unset_lock(&vertexLock[i]);
-    }
 
     //Time the global relabel operation and print:
     double endTime= omp_get_wtime();
@@ -220,6 +223,10 @@ void doGlobalRelabeling(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
         omp_set_lock(&printLock);
         cout<<omp_get_thread_num()<<" took "<<endTime-startTime<<" time to do globalRelabeling"<<endl;
         omp_unset_lock(&printLock);
+    }
+    
+    for(int i=0; i<numVertices; i++){
+        omp_unset_lock(&vertexLock[i]);
     }
 
     return;
@@ -576,8 +583,14 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 void getNewVertex(queue<int>& inQueue, queue<int>&activeVertexQueue, vector<omp_lock_t>& vertexLock, vector<vertex>& vertexList){
     int minSize= inputQueueSize - inQueue.size();
     minSize= minSize > 0 ? minSize : 0;
+    
+    if(DEBUG_temp){
+     omp_set_lock(&printLock);
+     cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" minSize "<<minSize<<endl;
+     omp_unset_lock(&printLock);
+    }
    
-    int numNewVertices= MIN(minSize, activeVertexQueue.size());
+   int numNewVertices= MIN(minSize, activeVertexQueue.size());
 
     for(int i=0; i<numNewVertices; i++){
         int v= activeVertexQueue.front();
@@ -653,6 +666,11 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //that is to be woken up by an interprocessor interrupt
         while(inQueue.empty()){
             numIdleProcessors++;
+            if(DEBUG){
+                omp_set_lock(&printLock);
+                cout<<omp_get_thread_num()<<" is stuck here with size " << inQueue.size()<<endl;
+                omp_unset_lock(&printLock);
+            }
             
             /*if(DEBUG){
                 omp_set_lock(&printLock);
@@ -703,7 +721,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //This is so because the lock need not be held. Only all the
         //vertex locks need to be held instream.
         if(isGlobalRelabelingReq){
-            doGlobalRelabeling(vertexLock, adjList, edgeList, vertexList);
+            //doGlobalRelabeling(vertexLock, adjList, edgeList, vertexList);
         }
         
         
@@ -716,6 +734,13 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         while(!inQueue.empty()){
             int v= inQueue.front();
             inQueue.pop();
+
+        	if(DEBUG){
+            	omp_set_lock(&printLock);
+            	cout<<"thread " << omp_get_thread_num() << "is discharging vertex " <<v<<endl;
+            	omp_unset_lock(&printLock);
+            }
+
             discharge(outQueue, vertexList, edgeList, adjList, v, vertexLock);
 			//TODO: don't wait for the entire inQueue to be discharged before pushing out 
 			//vertices to the outQueue
