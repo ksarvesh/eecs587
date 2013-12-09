@@ -54,9 +54,10 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
+#define NUM_THREADS 8 
 #define DEBUG 0
 #define DEBUG_temp 0
+#define TIMING 1
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -75,7 +76,7 @@ omp_lock_t printLock;
 //This will be changed by holding the queueLock since we do
 //not want anything to access the queue while the number of
 //vertices to be grabbed from the queue is being modified.
-int inputQueueSize = 1;
+int inputQueueSize = 10;
 
 //This is to keep a track of how many discharges have happened.
 //Once the num of discharges (over all processors) has reached 
@@ -203,6 +204,9 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
  * held while calling this function.
  ****************************************************************/
 void doGlobalRelabeling(omp_lock_t* queueLock, vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList){
+    
+    double startTime= omp_get_wtime();
+
     //This function should be called with the queueLock being held
     while(isAnyProcessorDischarging()){
         //Spin loop
@@ -224,6 +228,14 @@ void doGlobalRelabeling(omp_lock_t* queueLock, vector<vector<int> >& adjList, ve
     //lock is freed in the caller function.
     globalRelabel(adjList, edgeList, vertexList);
     
+    double endTime= omp_get_wtime();
+
+    if(TIMING){
+        omp_set_lock(&printLock);
+        cout<<omp_get_thread_num()<<" took "<<endTime-startTime<<" time to do globalRelabeling"<<endl;
+        omp_unset_lock(&printLock);
+    }
+
     return;
 }
 
