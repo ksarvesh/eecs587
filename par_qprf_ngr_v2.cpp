@@ -718,6 +718,10 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             isGlobalRelabelingReq= true;
         }
 
+	//Keep a local copy of the inputQueueSize so that you do not have to
+	//grab the lock unneccesarily.
+	int tempInputQueueSize= inputQueueSize;
+
         //At this point, this processor still holds the shared activeVertexQueue 
         //lock. Also, at this point, the inQueue is non zero in size.
         //We can give up the shared queue lock at this point since we are not
@@ -751,11 +755,11 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             discharge(outQueue, vertexList, edgeList, adjList, v, vertexLock);
 	    //TODO: don't wait for the entire inQueue to be discharged before pushing out 
 	    //vertices to the outQueue
-      	    omp_set_lock(queueLock);
-	    if(outQueue.size() >= inputQueueSize){
+	    if(outQueue.size() >= tempInputQueueSize){
+      	   	omp_set_lock(queueLock);
        	 	pushNewVertex(outQueue, activeVertexQueue);
+	    	omp_unset_lock(queueLock);
 	    }
-	    omp_unset_lock(queueLock);
         }
         
         //Re-grab the queueLock before making changes to any of the 
