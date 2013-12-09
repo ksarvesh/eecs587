@@ -58,11 +58,11 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 4
+#define NUM_THREADS 2
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
-
+#define BUSY_WAIT 0
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
 int numVertices, numEdges;
@@ -263,7 +263,7 @@ void changeBufferSize(queue<int>& activeVertexQueue){
     //If the inputQueueSize is made zero, change it to size 1.
     //This is to prevent pre-mature termination of the algorithm.
     inputQueueSize= inputQueueSize == 0 ? 1 : inputQueueSize;
-
+    inputQueueSize= inputQueueSize > 16 ? 16 : inputQueueSize;
 
     //Time the global relabel operation and print:
     double endTime= omp_get_wtime();
@@ -693,7 +693,12 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             double startTime= omp_get_wtime();
             omp_unset_lock(queueLock);
             //TODO:sleep(10ms);
-            while(omp_get_wtime()-startTime > .010);
+            if(BUSY_WAIT){
+		omp_set_lock(&printLock);
+		cout<<"thread: "<<omp_get_thread_num()<<" busyWaiting"<<endl;
+		omp_unset_lock(&printLock);
+ 	    }
+            // while(omp_get_wtime()-startTime > .020);
             omp_set_lock(queueLock);
             
             //TODO: What if we put the -- outside the while loop,
@@ -749,9 +754,23 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         }
         
         //Re-grab the queueLock before making changes to any of the 
-        //shared variables 
+        //shared variables
+        //
+        if(BUSY_WAIT){
+	    omp_set_lock(&printLock);
+	    cout<<"thread: "<<omp_get_thread_num()<<" trying to grab lock"<<endl;
+	    omp_unset_lock(&printLock);
+ 	}
+        
         omp_set_lock(queueLock);
-        getNewVertex(inQueue, outQueue, vertexLock, vertexList);
+        
+        if(BUSY_WAIT){
+	    omp_set_lock(&printLock);
+	    cout<<"thread: "<<omp_get_thread_num()<<" grabs lock"<<endl;
+	    omp_unset_lock(&printLock);
+ 	}
+
+	getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
             
         //Increment the total number of discharge operations.
