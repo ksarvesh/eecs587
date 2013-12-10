@@ -88,7 +88,8 @@ int totalNumDischarges= 0;
 // data structure to represent graph vertices 
 struct vertex{
     int height;					
-    int excessFlow;		 
+    int excessFlow;
+    int waveNumber;
     //int isActive;			// FALSE - vertex is not in active queue
 											// TRUE  - vertex already in active queue
 };
@@ -108,7 +109,7 @@ vector<int> marked;
 bool isGlobalRelabelingInProgress= false;
 bool bfsQueueInUse= false;
 bool isSecondBfs= false;
-
+int waveNumber= 0;
 
 /*****************************************************************
  * The globalRelabel function performs a backwards breadth-first
@@ -190,10 +191,6 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
         numExplored++;
 	}
 
-    omp_set_lock(queueLock);
-    bfsQueueInUse=false;
-    omp_unset_lock(queueLock);
-
     omp_unset_lock(&bfsLock);
 }
 
@@ -216,6 +213,13 @@ void startGlobalRelabel(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
     marked[sinkId]=true;
     marked[sourceId]=true;
 
+    waveNumber+=1;
+    
+    vertex_lock(vertexLock, sourceId, sinkId, true);
+    vertexList[sourceId].waveNumber= waveNumber;
+    vertexList[sinkId].waveNumber= waveNumber;
+    vertex_lock(vertexLock, sourceId, sinkId, false);
+    
     bfsQueue.push(sinkId);
 
     omp_unset_lock(&bfsLock);
@@ -365,7 +369,7 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     //Set height of the source node to be numVertices
     vertex zeroVertex;
     //zeroVertex.height = zeroVertex.excessFlow = zeroVertex.isActive = 0;
-    zeroVertex.height = zeroVertex.excessFlow = 0;
+    zeroVertex.height = zeroVertex.excessFlow = zeroVertex.waveNumber= 0;
     vertexList.resize(numVertices, zeroVertex);
     vertexList[sourceId].height = numVertices;
     
@@ -535,7 +539,7 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 		
 		// push if edge has residue and height of v > w, else go to next edge
 		// in vertex's v list 
-		if(residue > 0  &&  vertexList[v].height > vertexList[w].height){
+		if(residue > 0  &&  vertexList[v].height > vertexList[w].height && vertexList[v].waveNumber==vertexList[w].waveNumber){
 			push( outQueue, vertexList, edgeList, v, w, e);
 		}else{
 			currentEdgeId++;
