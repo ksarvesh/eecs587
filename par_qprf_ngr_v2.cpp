@@ -58,9 +58,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 12
+#define NUM_THREADS 1
 #define DEBUG 0
-#define DEBUG_temp 1
+#define DEBUG_temp 0
 #define TIMING 0
 #define BUSY_WAIT 0
 // {s,t} read from input file
