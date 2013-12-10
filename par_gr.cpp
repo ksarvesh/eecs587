@@ -58,9 +58,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 12
+#define NUM_THREADS 8
 #define DEBUG 0
-#define DEBUG_temp 0
+#define DEBUG_temp 1
 #define TIMING 0
 #define BUSY_WAIT 0
 #define GR_Q_SIZE 4
@@ -90,6 +90,7 @@ struct vertex{
     int height;					
     int excessFlow;
     int waveNumber;
+    int level;
     //int isActive;			// FALSE - vertex is not in active queue
 											// TRUE  - vertex already in active queue
 };
@@ -133,25 +134,35 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 	{
 		// reset breadth-first search after done with sink 
 		if( bfsQueue.empty() ){
-			omp_set_lock(queueLock);
             if(isSecondBfs){
+			    omp_set_lock(queueLock);
                 isGlobalRelabelingInProgress= false;
-                isSecondBfs= false;
                 omp_unset_lock(queueLock);
+                isSecondBfs= false;
+                if(DEBUG_temp){
+                    omp_set_lock(&printLock);
+                    cout<<"thread: "<<omp_get_thread_num()<<" finishes globalRelabeling"<<endl;
+                    omp_unset_lock(&printLock);
+                }
                 break;
             }else{
                 isSecondBfs= true;
                 bfsQueue.push(sourceId);
-                omp_unset_lock(queueLock);
            }
         }
 
 		currentEdgeId = 0;
 		v = bfsQueue.front();
 		bfsQueue.pop();
-        
+         
+        if(DEBUG_temp){
+            omp_set_lock(&printLock);
+            cout<<"thread: "<<omp_get_thread_num()<<" continues globalRelabeling"<<endl;
+            omp_unset_lock(&printLock);
+        }
+
         omp_set_lock(&vertexLock[v]);
-        int vHeight= vertexList[v].height;
+        int vLevel= vertexList[v].level;
         omp_unset_lock(&vertexLock[v]);
 
 		while( currentEdgeId < adjList[v].size() )
@@ -176,8 +187,10 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 			if( !marked[w] && residue>0 )
 			{
 				// relabel w/ depth
-				vertexList[w].height = vHeight+1;
-				bfsQueue.push( w );
+				vertexList[w].level = vLevel+1;
+				vertexList[w].waveNumber= waveNumber;
+                vertexList[w].height = vertexList[w].height < vertexList[w].level ? vertexList[w].level : vertexList[w].height;
+                bfsQueue.push(w);
 				marked[w] = TRUE;
 			}
 
@@ -193,6 +206,47 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 
     omp_unset_lock(&bfsLock);
 }
+
+/*****************************************************************
+ * This function takes to vertex indexes and locks the vertex 
+ * with the minimum index first or unlocks the vertex with the 
+ * minimum index last. Avoids dealocks among processor
+ * trying to push the same edge.
+ *
+ ****************************************************************/
+void vertex_lock( vector<omp_lock_t>& vertexLock, int v, int w, int lock )
+{
+	// get locks v and w, to avoid deadlock grab first vertex with the
+	// minimum index
+	if( MIN( v,w ) == v )
+	{ // v is min
+		// set or unset lock
+		if( lock==TRUE )
+		{ // set lock of min vertex first
+			omp_set_lock( &vertexLock[v] );
+			omp_set_lock( &vertexLock[w] );
+		}
+		else
+		{ // unset lock of min vertex last
+			omp_unset_lock( &vertexLock[w] );
+			omp_unset_lock( &vertexLock[v] );
+		}
+	}
+	else
+	{ // w is min
+		if( lock==TRUE )
+		{ // set lock 
+			omp_set_lock( &vertexLock[w] );
+			omp_set_lock( &vertexLock[v] );
+		}
+		else
+		{ // unset lock
+			omp_unset_lock( &vertexLock[v] );
+			omp_unset_lock( &vertexLock[w] );
+		}
+	}
+}
+
 
 /*****************************************************************
  * This funtion changes the inputQueue size depending on the 
@@ -224,6 +278,12 @@ void startGlobalRelabel(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
 
     omp_unset_lock(&bfsLock);
 
+    if(DEBUG_temp){
+	    omp_set_lock(&printLock);
+	    cout<<"thread: "<<omp_get_thread_num()<<" starts globalRelabeling"<<endl;
+	    omp_unset_lock(&printLock);
+    }
+    
     globalRelabel(adjList, edgeList, vertexList, queueLock, vertexLock);
 
     return;
@@ -272,46 +332,6 @@ void changeBufferSize(queue<int>& activeVertexQueue){
     }
 
 
-}
-
-/*****************************************************************
- * This function takes to vertex indexes and locks the vertex 
- * with the minimum index first or unlocks the vertex with the 
- * minimum index last. Avoids dealocks among processor
- * trying to push the same edge.
- *
- ****************************************************************/
-void vertex_lock( vector<omp_lock_t>& vertexLock, int v, int w, int lock )
-{
-	// get locks v and w, to avoid deadlock grab first vertex with the
-	// minimum index
-	if( MIN( v,w ) == v )
-	{ // v is min
-		// set or unset lock
-		if( lock==TRUE )
-		{ // set lock of min vertex first
-			omp_set_lock( &vertexLock[v] );
-			omp_set_lock( &vertexLock[w] );
-		}
-		else
-		{ // unset lock of min vertex last
-			omp_unset_lock( &vertexLock[w] );
-			omp_unset_lock( &vertexLock[v] );
-		}
-	}
-	else
-	{ // w is min
-		if( lock==TRUE )
-		{ // set lock 
-			omp_set_lock( &vertexLock[w] );
-			omp_set_lock( &vertexLock[v] );
-		}
-		else
-		{ // unset lock
-			omp_unset_lock( &vertexLock[v] );
-			omp_unset_lock( &vertexLock[w] );
-		}
-	}
 }
 
 
@@ -369,9 +389,10 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     //Set height of the source node to be numVertices
     vertex zeroVertex;
     //zeroVertex.height = zeroVertex.excessFlow = zeroVertex.isActive = 0;
-    zeroVertex.height = zeroVertex.excessFlow = zeroVertex.waveNumber= 0;
+    zeroVertex.height = zeroVertex.excessFlow = zeroVertex.waveNumber= zeroVertex.level = 0;
     vertexList.resize(numVertices, zeroVertex);
     vertexList[sourceId].height = numVertices;
+    vertexList[sourceId].level = numVertices;
     
     //To remove the ending \n char in the previous line (check test1.txt)
     getline(inFile, line);
@@ -646,12 +667,6 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
     omp_set_lock(queueLock);
     
     while(1){
-
-        /*if(DEBUG){
-            omp_set_lock(&printLock);
-            cout<<omp_get_thread_num()<<" is the thread in progess"<<endl;
-            omp_unset_lock(&printLock);
-        }*/
         
         //Get new vertices from the shared queue if the size of the current input buffer
         //is smaller than the size we set in inputQueueSize
@@ -663,7 +678,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             omp_unset_lock(&printLock);
         }
         
-	//Spin loop (busy wait) implementation of cpu sleep
+    	//Spin loop (busy wait) implementation of cpu sleep
         //that is to be woken up by an interprocessor interrupt
         while(inQueue.empty()){
             numIdleProcessors++;
@@ -695,16 +710,16 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             omp_unset_lock(queueLock);
             //TODO:sleep(10ms);
             if(BUSY_WAIT){
-		omp_set_lock(&printLock);
-		cout<<"thread: "<<omp_get_thread_num()<<" busyWaiting"<<endl;
-		omp_unset_lock(&printLock);
- 	    }
+	        	omp_set_lock(&printLock);
+	        	cout<<"thread: "<<omp_get_thread_num()<<" busyWaiting"<<endl;
+	        	omp_unset_lock(&printLock);
+ 	        }
             // while(omp_get_wtime()-startTime > .020);
             omp_set_lock(queueLock);
             
             //TODO: What if we put the -- outside the while loop,
             //will that still work. Which will be more efficient.
-   	    //Decrement the number of sleeping cpus:
+   	        //Decrement the number of sleeping cpus:
             numIdleProcessors--;
             getNewVertex(inQueue, activeVertexQueue, vertexLock, vertexList);
         }
@@ -715,15 +730,20 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //modified depending on the number of idle processors.
         bool isGlobalRelabelingReq= false;
 
-        if(totalNumDischarges > 200){
+        if(totalNumDischarges > 2*numVertices){
             totalNumDischarges = 0;
             changeBufferSize(activeVertexQueue);
             isGlobalRelabelingReq= !(isGlobalRelabelingInProgress);
+            
+            if(isGlobalRelabelingReq){
+                isGlobalRelabelingInProgress=true;
+            }
 	    
    	        if(DEBUG_temp){
    	         omp_set_lock(&printLock);
-   	         cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" activeVertices: "<<activeVertexQueue.size();
-   	         cout<<" inQueue.size: "<<inQueue.size()<<" outQueue.size: "<<outQueue.size()<<" numActive: "<<NUM_THREADS - numIdleProcessors<<endl;
+             cout<<"thread: "<<omp_get_thread_num()<<" isGlobalRelabelingReq "<<isGlobalRelabelingReq<<endl;
+   	         //cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" activeVertices: "<<activeVertexQueue.size();
+   	         //cout<<" inQueue.size: "<<inQueue.size()<<" outQueue.size: "<<outQueue.size()<<" numActive: "<<NUM_THREADS - numIdleProcessors<<endl;
 	         omp_unset_lock(&printLock);
    	        }
         }
@@ -752,7 +772,8 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
                 omp_unset_lock(queueLock);
             }else{
                 if(isGlobalRelabelingReq){
-                    isGlobalRelabelingInProgress= true;
+                    //isGlobalRelabelingInProgress= true;
+                    isGlobalRelabelingReq= false;
                     bfsQueueInUse= true;
                     omp_unset_lock(queueLock);
                     //put sink node into the queue:
@@ -801,20 +822,20 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //shared variables
         //
         if(BUSY_WAIT){
-	    omp_set_lock(&printLock);
-	    cout<<"thread: "<<omp_get_thread_num()<<" trying to grab lock"<<endl;
-	    omp_unset_lock(&printLock);
- 	}
+	        omp_set_lock(&printLock);
+	        cout<<"thread: "<<omp_get_thread_num()<<" trying to grab lock"<<endl;
+	        omp_unset_lock(&printLock);
+ 	    }
         
         omp_set_lock(queueLock);
         
         if(BUSY_WAIT){
-	    omp_set_lock(&printLock);
-	    cout<<"thread: "<<omp_get_thread_num()<<" grabs lock"<<endl;
-	    omp_unset_lock(&printLock);
- 	}
+	        omp_set_lock(&printLock);
+	        cout<<"thread: "<<omp_get_thread_num()<<" grabs lock"<<endl;
+	        omp_unset_lock(&printLock);
+    	}
 
-	getNewVertex(inQueue, outQueue, vertexLock, vertexList);
+    	getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
             
         //Increment the total number of discharge operations.
