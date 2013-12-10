@@ -58,9 +58,9 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
+#define NUM_THREADS 1
 #define DEBUG 0
-#define DEBUG_temp 1
+#define DEBUG_temp 0
 #define TIMING 0
 #define BUSY_WAIT 0
 #define GR_Q_SIZE 4
@@ -135,9 +135,9 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
 		// reset breadth-first search after done with sink 
 		if( bfsQueue.empty() ){
             if(isSecondBfs){
-			    omp_set_lock(queueLock);
-                isGlobalRelabelingInProgress= false;
-                omp_unset_lock(queueLock);
+			    //omp_set_lock(queueLock);
+                //isGlobalRelabelingInProgress= false;
+                //omp_unset_lock(queueLock);
                 isSecondBfs= false;
                 if(DEBUG_temp){
                     omp_set_lock(&printLock);
@@ -147,6 +147,9 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
                 break;
             }else{
                 isSecondBfs= true;
+                omp_set_lock(&vertexLock[sourceId]);
+                vertexList[sourceId].waveNumber=waveNumber;
+                omp_unset_lock(&vertexLock[sourceId]);
                 bfsQueue.push(sourceId);
            }
         }
@@ -269,10 +272,12 @@ void startGlobalRelabel(vector<omp_lock_t>& vertexLock, vector<vector<int> >& ad
 
     waveNumber+=1;
     
-    vertex_lock(vertexLock, sourceId, sinkId, true);
-    vertexList[sourceId].waveNumber= waveNumber;
+    //vertex_lock(vertexLock, sourceId, sinkId, true);
+    omp_set_lock(&vertexLock[sinkId]);
+    //vertexList[sourceId].waveNumber= waveNumber;
     vertexList[sinkId].waveNumber= waveNumber;
-    vertex_lock(vertexLock, sourceId, sinkId, false);
+    omp_unset_lock(&vertexLock[sinkId]);
+    //vertex_lock(vertexLock, sourceId, sinkId, false);
     
     bfsQueue.push(sinkId);
 
@@ -756,7 +761,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //lock. Also, at this point, the inQueue is non zero in size.
         //We can give up the shared queue lock at this point since we are not
         //acessing the shared variable any more.
-        omp_unset_lock(queueLock);
+        //omp_unset_lock(queueLock);
         
         //store the current size of the inQueue so that once all discharges 
         //are complete, we can update the total number of discharges that 
@@ -767,7 +772,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         while(!inQueue.empty()){
             
             //Concurrent GR:
-            omp_set_lock(queueLock);
+            //omp_set_lock(queueLock);
             if(bfsQueueInUse){
                 omp_unset_lock(queueLock);
             }else{
@@ -779,19 +784,29 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
                     //put sink node into the queue:
                     startGlobalRelabel(vertexLock, adjList, edgeList, vertexList, queueLock);
                     //set the inUse to false once 
-                    //done with the global relabel 
+                    //done with the global relabel
+                    omp_set_lock(&bfsLock);
                     omp_set_lock(queueLock);
                     bfsQueueInUse= false;
+                    if(bfsQueue.empty()){
+                        isGlobalRelabelingInProgress= false;
+                    }
                     omp_unset_lock(queueLock);
+                    omp_unset_lock(&bfsLock);
                 }else if(isGlobalRelabelingInProgress){
                     bfsQueueInUse= true;
                     omp_unset_lock(queueLock);
                     globalRelabel(adjList, edgeList, vertexList, queueLock, vertexLock);
                     //set the inUse to false once 
-                    //done with the global relabel 
+                    //done with the global relabel
+                    omp_set_lock(&bfsLock);
                     omp_set_lock(queueLock);
                     bfsQueueInUse= false;
+                    if(bfsQueue.empty()){
+                        isGlobalRelabelingInProgress= false;
+                    }
                     omp_unset_lock(queueLock);
+                    omp_unset_lock(&bfsLock);
                 }else{
                     omp_unset_lock(queueLock);
                 }    
@@ -811,13 +826,13 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             
             //Don't wait for the entire inQueue to be discharged 
             //before pushing out vertices to the outQueue
-	        if(outQueue.size() >= tempInputQueueSize){
-               	omp_set_lock(queueLock);
+            omp_set_lock(queueLock);
+	        
+            if(outQueue.size() >= tempInputQueueSize){
            	 	pushNewVertex(outQueue, activeVertexQueue);
-	        	omp_unset_lock(queueLock);
 	        }
         }
-        
+            
         //Re-grab the queueLock before making changes to any of the 
         //shared variables
         //
@@ -826,8 +841,6 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 	        cout<<"thread: "<<omp_get_thread_num()<<" trying to grab lock"<<endl;
 	        omp_unset_lock(&printLock);
  	    }
-        
-        omp_set_lock(queueLock);
         
         if(BUSY_WAIT){
 	        omp_set_lock(&printLock);
