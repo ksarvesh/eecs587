@@ -58,12 +58,12 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 1
+#define NUM_THREADS 8
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
 #define BUSY_WAIT 0
-#define GR_Q_SIZE 4
+#define GR_Q_SIZE 50
 
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
@@ -82,8 +82,8 @@ int inputQueueSize = 10;
 //Once the num of discharges (over all processors) has reached 
 //a threshold amount, it will reset the count to 0 and call 
 //changeBufferSize and doGlobalRelabeling.
-int totalNumDischarges= 0;
-
+int totalNumResizeDischarges= 0;
+int totalNumGRDischarges= 0;
 
 // data structure to represent graph vertices 
 struct vertex{
@@ -734,10 +734,14 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         //do a global relabel and check if the buffer size has to be 
         //modified depending on the number of idle processors.
         bool isGlobalRelabelingReq= false;
-
-        if(totalNumDischarges > 2*numVertices){
-            totalNumDischarges = 0;
+        
+        if(totalNumResizeDischarges > 200){
+            totalNumResizeDischarges=0;
             changeBufferSize(activeVertexQueue);
+        }
+
+        if(totalNumGRDischarges > 2*numVertices){
+            totalNumGRDischarges = 0;
             isGlobalRelabelingReq= !(isGlobalRelabelingInProgress);
             
             if(isGlobalRelabelingReq){
@@ -852,8 +856,8 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
         pushNewVertex(outQueue, activeVertexQueue);
             
         //Increment the total number of discharge operations.
-        totalNumDischarges+= numDischarges;
-
+        totalNumResizeDischarges+= numDischarges;
+        totalNumGRDischarges+= numDischarges;
    }
 
 }
