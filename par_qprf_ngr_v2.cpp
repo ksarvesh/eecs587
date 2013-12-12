@@ -553,10 +553,11 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 	// if there is any excess left in v, then relabel and put back at the rear
 	// of the queue and mark vertex as active.
+	
+	// get lock of vertex v before relabel and even before checking the excess flow
+	// since the vertices are themselves shared data:
+	omp_set_lock( &vertexLock[v] );
 	if(vertexList[v].excessFlow > 0){
-
-		// get lock of vertex v before relabel
-		omp_set_lock( &vertexLock[v] );
 		// DEBUG
         if(DEBUG){
             omp_set_lock(&printLock);
@@ -564,12 +565,10 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
             omp_unset_lock(&printLock);
         }
 		relabel(adjList, vertexList, edgeList, v);
-		// release lock of vertex v after relabel
-		//vertexList[v].isActive= 1;
-		omp_unset_lock( &vertexLock[v] );
-
   	    outQueue.push(v);
 	}
+	//Unlock the vertex
+	omp_unset_lock( &vertexLock[v] );
 	
 	return;
 }
