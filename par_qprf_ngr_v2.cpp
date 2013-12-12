@@ -58,7 +58,7 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 1
+#define NUM_THREADS 8
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
@@ -520,7 +520,7 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 	// try to push to all edges until excess becomes 0 or there are no more
 	// edges to push to. 
-	while(currentEdgeId < adjList[v].size() && vertexList[v].excessFlow>0){
+	while(currentEdgeId < adjList[v].size()){
 		 e= adjList[v][currentEdgeId];
 	
 		// calculate residue, need to know if forward or backward edge
@@ -539,6 +539,12 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 			residue= edgeList[e].flow;
 		}
 		
+		//Make sure the excess flow for vertex v is non zero:
+		if(vertexList[v].excessFlow <= 0){
+			vertex_lock( vertexLock,v,w,FALSE );
+			return;
+		}
+
 		// push if edge has residue and height of v > w, else go to next edge
 		// in vertex's v list 
 		if(residue > 0  &&  vertexList[v].height > vertexList[w].height){
