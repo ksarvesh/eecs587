@@ -12,13 +12,7 @@
  * any newly activated vertices back in the queue. 
  *
  * ACTIVE QUEUE:
- * The queue for active vertices is divided in two: one shared, and the other local to 
- * each processor. The local queue is further subdivided into inqueue and outqueue. A
- * processor takes a vertex from inqueue and discharges it. When inqueue is empty, a 
- * processor gets a new batch of b vertices from the shared queue and stores them in its
- * local inqueue. When outqueue gets full, the processor places the entire content in
- * back to the shared queue. The size of b of inqueue and outqueue is dynamically 
- * adjusted based on the number of idle processors. 
+ *
  *
  * LOCKS:
  * There are two main omp locks used in the algorithm:
@@ -31,7 +25,7 @@
  *     push and relabel operations.
  *     Lock name: vertexLock
  *
- * GLOBAL RELABELING:
+ * 
  *
  * 
  *
