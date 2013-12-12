@@ -58,7 +58,7 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
+#define NUM_THREADS 1
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
@@ -549,6 +549,17 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 		// in vertex's v list 
 		if(residue > 0  &&  vertexList[v].height > vertexList[w].height){
 			push( outQueue, vertexList, edgeList, v, w, e);
+			//This check is important to make sure
+			//vertex v is not on two queues at the 
+			//same time. This will happen if there
+			//is a push into v from another processor
+			//between the time it gives up the lock 
+			//and tries grabbing the new pair of vertex
+			//locks. 
+			if(vertexList[v].excessFlow == 0){
+				vertex_lock(vertexLock, v, w, false);
+				return;
+			}
 		}else{
 			currentEdgeId++;
 		}

@@ -58,7 +58,7 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 8
+#define NUM_THREADS 12
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
@@ -544,7 +544,7 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 	// try to push to all edges until excess becomes 0 or there are no more
 	// edges to push to. 
-	while(currentEdgeId < adjList[v].size() && vertexList[v].excessFlow>0){
+	while(currentEdgeId < adjList[v].size()){
 		 e= adjList[v][currentEdgeId];
 	
 		// calculate residue, need to know if forward or backward edge
@@ -563,10 +563,22 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 			residue= edgeList[e].flow;
 		}
 		
+		//Make sure the excess flow on v is non zero
+		if(vertexList[v].excessFlow == 0){
+			vertex_lock(vertexLock, v, w, false);
+			return;
+		}
+			
 		// push if edge has residue and height of v > w, else go to next edge
 		// in vertex's v list 
 		if(residue > 0  &&  vertexList[v].height > vertexList[w].height && vertexList[v].waveNumber==vertexList[w].waveNumber){
 			push( outQueue, vertexList, edgeList, v, w, e);
+			//Need to check this after every push to prevent the case
+			//where vertex v is on two different queues at the same time.
+			if(vertexList[v].excessFlow == 0){
+				vertex_lock(vertexLock, v, w, false);
+				return;
+			}
 		}else{
 			currentEdgeId++;
 		}
@@ -577,23 +589,23 @@ void discharge( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& 
 
 	// if there is any excess left in v, then relabel and put back at the rear
 	// of the queue and mark vertex as active.
+	// get lock of vertex v before relabel
+	omp_set_lock( &vertexLock[v] );
 	if(vertexList[v].excessFlow > 0){
 
-		// get lock of vertex v before relabel
-		omp_set_lock( &vertexLock[v] );
-		// DEBUG
-        if(DEBUG){
-            omp_set_lock(&printLock);
-            cout<< "thread "<<omp_get_thread_num()<<" is relabeling vertex "<<v<<endl;
-            omp_unset_lock(&printLock);
-        }
-		relabel(adjList, vertexList, edgeList, v);
-		// release lock of vertex v after relabel
-		//vertexList[v].isActive= 1;
-		omp_unset_lock( &vertexLock[v] );
+   	    // DEBUG
+       	    if(DEBUG){
+       	   	 omp_set_lock(&printLock);
+       	         cout<< "thread "<<omp_get_thread_num()<<" is relabeling vertex "<<v<<endl;
+       	   	 omp_unset_lock(&printLock);
+       	    }
+   	    
+	    relabel(adjList, vertexList, edgeList, v);
 
   	    outQueue.push(v);
 	}
+	// release lock of vertex v after relabel
+	omp_unset_lock( &vertexLock[v] );
 	
 	return;
 }
