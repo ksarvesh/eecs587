@@ -59,10 +59,12 @@ using namespace std;
 #define FALSE 0
 #define INFINITE 10000000
 #define NUM_THREADS 1
+#define NUM_PERFORMANCE_THREADS 8
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
 #define BUSY_WAIT 0
+#define PERFORMANCE_ANALYSIS 1
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
 int numVertices, numEdges;
@@ -102,6 +104,11 @@ struct edge{
 // global relabeling data structures
 queue<int> 	bfsQueue;
 vector<int> marked;
+
+//This is to keep track of the parallelizability of teh input
+int numTimesDischarged = 0;
+int numTimesParallizable = 0;
+
 
 /*****************************************************************
  * The globalRelabel function performs a backwards breadth-first
@@ -809,7 +816,14 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 
 	getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
-            
+       
+	 if(PERFORMANCE_ANALYSIS){
+		numTimesDischarged++;
+		if(activeVertexQueue.size() + inQueue.size() > NUM_PERFORMANCE_THREADS * inputQueueSize){
+			numTimesParallizable++;
+		}
+	}
+	 
         //Increment the total number of discharge operations.
         totalNumDischarges+= numDischarges;
 
@@ -876,6 +890,9 @@ void preflow_push(string fileName)
                 double end= omp_get_wtime();
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
+		if(PERFORMANCE_ANALYSIS){
+			cout<<"numTotalDischarges: "<<numTimesDischarged<<" numTimesParallizable: "<<numTimesParallizable<<endl;
+		}
                 printf("Elapsed time: %f secs\n", end - begin);
                 omp_unset_lock(&printLock);
            // }
