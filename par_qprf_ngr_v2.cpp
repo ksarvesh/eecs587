@@ -58,13 +58,13 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 1
+#define NUM_THREADS 12
 #define NUM_PERFORMANCE_THREADS 8
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
 #define BUSY_WAIT 0
-#define PERFORMANCE_ANALYSIS 1
+#define PERFORMANCE_ANALYSIS 0
 // {s,t} read from input file
 int sourceId, sinkId, numIdleProcessors=0, isCompleted=0;
 int numVertices, numEdges;

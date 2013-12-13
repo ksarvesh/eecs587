@@ -58,7 +58,7 @@ using namespace std;
 #define TRUE  1
 #define FALSE 0
 #define INFINITE 10000000
-#define NUM_THREADS 1
+#define NUM_THREADS 12
 #define DEBUG 0
 #define DEBUG_temp 0
 #define TIMING 0
@@ -113,8 +113,8 @@ bool isSecondBfs= false;
 int waveNumber= 0;
 
 //This is to keep track of the parallism of inputs:
-int numTimesDischarged=0;
-int numTimesGoodParallelism=0;
+//int numTimesDischarged=0;
+//int numTimesGoodParallelism=0;
 
 /*****************************************************************
  * The globalRelabel function performs a backwards breadth-first
@@ -877,10 +877,10 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
     	getNewVertex(inQueue, outQueue, vertexLock, vertexList);
         pushNewVertex(outQueue, activeVertexQueue);
         
-	if(inQueue.size() + activeVertexQueue.size() > 8*inputQueueSize){
-		numTimesGoodParallelism++;
-	}
-	numTimesDischarged++; 
+//	if(inQueue.size() + activeVertexQueue.size() > 8*inputQueueSize){
+//		numTimesGoodParallelism++;
+//	}
+//	numTimesDischarged++; 
 
         //Increment the total number of discharge operations.
         totalNumResizeDischarges+= numDischarges;
@@ -948,7 +948,7 @@ void preflow_push(string fileName)
                 double end= omp_get_wtime();
                 omp_set_lock(&printLock);
                 cout<<vertexList[sinkId].excessFlow<<" is the maximum flow value"<<endl;
-		cout<<"numTimes discharged: "<<numTimesDischarged<<" numTimes para: "<<numTimesGoodParallelism<<endl;
+	//	cout<<"numTimes discharged: "<<numTimesDischarged<<" numTimes para: "<<numTimesGoodParallelism<<endl;
                 printf("Elapsed time: %f secs\n", end - begin);
                 omp_unset_lock(&printLock);
            // }
