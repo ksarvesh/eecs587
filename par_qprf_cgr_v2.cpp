@@ -1,6 +1,6 @@
 /****************************************************************************************
  * 
- * Program: par_qprf_gr_v2.cpp
+ * Program: par_qprf_cgr_v2.cpp
  * Authors: Adrian Montero and Sarversh Kirthivasan
  *
  * DESCRIPTION:
