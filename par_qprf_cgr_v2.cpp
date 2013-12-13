@@ -5,16 +5,17 @@
  *
  * DESCRIPTION:
  * This program performs the paralel (shared memory) version of the Goldberg's maximum
- * flow algorithm. 
+ * flow algorithm using a dynamic manager worker queue and a concurrent global relabel
+ * heuristic. 
  *
  * The general approach is to maintain a global work queue which keeps track of the
  * active vertices, applies push operations to them, possibly relables them, and puts
  * any newly activated vertices back in the queue. This version also dynamically changes
  * the size of the inQueue and the outQueue there by making it more efficient.
  * 
- * This is different from version 1 in that this does not do a busy wait while trying 
- * to do the global relabel operation. It acquires all vertexLocks instead of the 
- * queueLock. This approach is more parallel. 
+ * This is different from the previous versions in that this does a concurrent global
+ * relabeling operation. While one processor does the global relabel operation, other 
+ * processors could concurrently be performing a discharge operation on other vertices.
  *
  * ACTIVE QUEUE:
  * The queue for active vertices is divided in two: one shared, and the other local to 
