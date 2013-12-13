@@ -129,7 +129,7 @@ int waveNumber= 0;
  ****************************************************************/
 void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vector<vertex>& vertexList, omp_lock_t* queueLock, vector<omp_lock_t>& vertexLock)
 {
-	int currentEdgeId, residue, v, w, e;	
+    int currentEdgeId, residue, v, w, e;	
     int numExplored= 0;
 
     omp_set_lock(&bfsLock);
@@ -158,9 +158,9 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
            }
         }
 
-		currentEdgeId = 0;
-		v = bfsQueue.front();
-		bfsQueue.pop();
+	currentEdgeId = 0;
+	v = bfsQueue.front();
+	bfsQueue.pop();
          
         if(DEBUG_temp){
             omp_set_lock(&printLock);
@@ -172,41 +172,41 @@ void globalRelabel( vector<vector<int> >& adjList, vector<edge>& edgeList, vecto
         int vLevel= vertexList[v].level;
         omp_unset_lock(&vertexLock[v]);
 
-		while( currentEdgeId < adjList[v].size() )
-		{ // iterate through each v node edge
-			e = adjList[v][currentEdgeId];
+	while( currentEdgeId < adjList[v].size() )
+	{ 	// iterate through each v node edge
+		e = adjList[v][currentEdgeId];
 			
-			// need to know if forward or backward edge
-			if(edgeList[e].from == v)
-			{ // backward edge
-				w= edgeList[e].to;
-				omp_set_lock(&vertexLock[w]);
-                residue = edgeList[e].flow;
-			}
-			else
-			{ // forward edge
-				w= edgeList[e].from;
-				omp_set_lock(&vertexLock[w]);
-				residue = edgeList[e].capacity - edgeList[e].flow;
-			}
-
-			// if vertex w has not been visited, push into queue and mark
-			if( !marked[w] && residue>0 )
-			{
-				// relabel w/ depth
-				vertexList[w].level = vLevel+1;
-				vertexList[w].waveNumber= waveNumber;
-                vertexList[w].height = vertexList[w].height < vertexList[w].level ? vertexList[w].level : vertexList[w].height;
-                bfsQueue.push(w);
-				marked[w] = TRUE;
-			}
-
-            //release the vertex locks:
-			omp_unset_lock(&vertexLock[w]);
-
-			// next edge
-			currentEdgeId++;
+		// need to know if forward or backward edge
+		if(edgeList[e].from == v)
+		{ // backward edge
+			w= edgeList[e].to;
+			omp_set_lock(&vertexLock[w]);
+                	residue = edgeList[e].flow;
 		}
+		else
+		{ // forward edge
+			w= edgeList[e].from;
+			omp_set_lock(&vertexLock[w]);
+			residue = edgeList[e].capacity - edgeList[e].flow;
+		}
+
+		// if vertex w has not been visited, push into queue and mark
+		if( !marked[w] && residue>0 )
+		{
+			// relabel w/ depth
+			vertexList[w].level = vLevel+1;
+			vertexList[w].waveNumber= waveNumber;
+                	vertexList[w].height = vertexList[w].height < vertexList[w].level ? vertexList[w].level : vertexList[w].height;
+                	bfsQueue.push(w);
+			marked[w] = TRUE;
+		}
+
+                //release the vertex locks:
+		omp_unset_lock(&vertexLock[w]);
+
+		// next edge
+		currentEdgeId++;
+	}
 
         numExplored++;
 	}
@@ -385,13 +385,13 @@ int initialize(string fileName, vector<vertex>& vertexList, vector<edge>& edgeLi
     marked.resize(numVertices,0);
    
 	// Initilize queue and vertex locks
-	omp_init_lock( queueLock_ptr );
+    omp_init_lock( queueLock_ptr );
     omp_init_lock(&bfsLock);
-	vertexLock.resize(numVertices);
-	for( int i=0;i>numVertices;i++ )
-	{
-		omp_init_lock( &vertexLock[i] );
-	}
+    vertexLock.resize(numVertices);
+    for( int i=0;i>numVertices;i++ )
+    {
+	omp_init_lock( &vertexLock[i] );
+    }
  
     //Initialize the vertexList such that all vertices except for the source
     //has a height of zero. Set all excess flow to zero initially.
@@ -472,7 +472,7 @@ void push( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& edgeL
     if(DEBUG){
         omp_set_lock(&printLock);
         cout<<"thread "<<omp_get_thread_num()<<" is pushing "<<send<< " from "<<v<<" to "<<w<<endl;
-	    omp_unset_lock(&printLock);
+	omp_unset_lock(&printLock);
     }
 
 	// update excessFlow 
@@ -484,7 +484,7 @@ void push( queue<int>& outQueue, vector<vertex>& vertexList, vector<edge>& edgeL
 	//if( w!=sinkId && w!=sourceId &&  vertexList[w].isActive == 0 ) 
 	if( w!=sinkId && w!=sourceId &&  vertexList[w].excessFlow == send ) 
 	{
-        //cout<< "pushing v onto the queue " << w<<endl;
+        	//cout<< "pushing v onto the queue " << w<<endl;
 		outQueue.push(w);
 		//vertexList[w].isActive= 1;
 	}
@@ -507,7 +507,7 @@ void relabel( vector<vector<int> >& adjList, vector<vertex>& vertexList, vector<
 	// 		- edge is in residual graph
 	for( int i=0; i<size;i++ )
 	{   
-        e= adjList[v][i];
+		e= adjList[v][i];
 
 		// calculate edge residue from v->e
 		if( edgeList[e].from==v )
@@ -522,7 +522,7 @@ void relabel( vector<vector<int> >& adjList, vector<vertex>& vertexList, vector<
 		}
 		
 		// if edge has residue, set vertex v height to 1 higher than w's 	
-        if( residue>0 )
+        	if( residue>0 )
 		{ // edge is in residual graph
            // cout<<"relabeling heights: "<<min_height<<" "<<vertexList[w].height<<endl;
 			min_height = MIN( min_height,vertexList[w].height );
@@ -530,11 +530,11 @@ void relabel( vector<vector<int> >& adjList, vector<vertex>& vertexList, vector<
 	}
 	vertexList[v].height = min_height + 1;
 	
-    if(DEBUG){
-        omp_set_lock(&printLock);
-        cout<<"thread "<<omp_get_thread_num()<<" has relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
-	    omp_unset_lock(&printLock);
-    }
+    	if(DEBUG){
+        	omp_set_lock(&printLock);
+		cout<<"thread "<<omp_get_thread_num()<<" has relabeled height for "<<v<<" : "<<vertexList[v].height<<endl;
+	    	omp_unset_lock(&printLock);
+    	}
 }
 
 /*****************************************************************
@@ -727,6 +727,9 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
                 return;
             }
             
+            //Let all other processors know that this processor
+            //is going into the idle state and so change the value
+            //of the buffer size s.
 	    if(!hasBeenChanged){
 		changeBufferSize(activeVertexQueue);
 		hasBeenChanged= true;
@@ -740,7 +743,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 	        	omp_set_lock(&printLock);
 	        	cout<<"thread: "<<omp_get_thread_num()<<" busyWaiting"<<endl;
 	        	omp_unset_lock(&printLock);
- 	        }
+ 	    }
             // while(omp_get_wtime()-startTime > .020);
             omp_set_lock(queueLock);
             
@@ -770,13 +773,13 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
                 isGlobalRelabelingInProgress=true;
             }
 	    
-   	        if(DEBUG_temp){
+   	    if(DEBUG_temp){
    	         omp_set_lock(&printLock);
-             cout<<"thread: "<<omp_get_thread_num()<<" isGlobalRelabelingReq "<<isGlobalRelabelingReq<<endl;
+             	 cout<<"thread: "<<omp_get_thread_num()<<" isGlobalRelabelingReq "<<isGlobalRelabelingReq<<endl;
    	         //cout<<omp_get_thread_num()<<" : inputQueueSize "<<inputQueueSize<<" activeVertices: "<<activeVertexQueue.size();
    	         //cout<<" inQueue.size: "<<inQueue.size()<<" outQueue.size: "<<outQueue.size()<<" numActive: "<<NUM_THREADS - numIdleProcessors<<endl;
 	         omp_unset_lock(&printLock);
-   	        }
+   	    }
         }
 
     	//Keep a local copy of the inputQueueSize so that you do not have to
@@ -855,8 +858,8 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
             omp_set_lock(queueLock);
 	        
             if(outQueue.size() >= tempInputQueueSize){
-           	 	pushNewVertex(outQueue, activeVertexQueue);
-	        }
+           	 pushNewVertex(outQueue, activeVertexQueue);
+	    }
         }
             
         //Re-grab the queueLock before making changes to any of the 
@@ -866,7 +869,7 @@ void startParallelAlgo(queue<int>& activeVertexQueue, vector<vertex>& vertexList
 	        omp_set_lock(&printLock);
 	        cout<<"thread: "<<omp_get_thread_num()<<" trying to grab lock"<<endl;
 	        omp_unset_lock(&printLock);
- 	    }
+        }
         
         if(BUSY_WAIT){
 	        omp_set_lock(&printLock);
@@ -901,14 +904,14 @@ void preflow_push(string fileName)
 
 	// vertices, edges, adjacency list, active queue 
 	// data structures declarion
-	vector<vertex> 				vertexList;
-	vector<edge> 					edgeList;
-	vector<vector<int> > 	adjList;
-	queue<int> 						activeVertexQueue;
+	vector<vertex> 	vertexList;
+	vector<edge> 	edgeList;
+	vector<vector<int> > adjList;
+	queue<int> activeVertexQueue;
 
 	// vertices and queue locks
 	omp_lock_t          queueLock;
-	vector<omp_lock_t> 	vertexLock;
+	vector<omp_lock_t>  vertexLock;
 
 	// populate data structures from input text file, push all possible flow out of 
 	// source vertex
